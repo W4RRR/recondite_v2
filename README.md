@@ -44,11 +44,9 @@
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/W4RRR/recondite_v2
+git clone https://github.com/W4RRR/recondite_v2.git
 cd recondite_v2
 ```
-
-Or download the repository as a ZIP file and extract it.
 
 2. Make scripts executable:
 ```bash
@@ -499,5 +497,4 @@ For issues, questions, or suggestions, please open an issue on GitHub.
 ---
 
 **Remember**: Always use this tool responsibly and only on systems you own or have explicit permission to test.
-
 

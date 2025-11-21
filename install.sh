@@ -83,6 +83,11 @@ install_go_tool_from_source() {
     local build_path=$3
     local output_name=$4
     
+    # Check if already installed
+    if check_tool_installed "$tool_name" "${LOCAL_BIN}/${output_name}"; then
+        return 0
+    fi
+    
     log INFO "Building $tool_name from source..."
     
     if [ ! -d "$tool_path" ]; then
@@ -126,9 +131,34 @@ install_go_tool_from_source() {
     fi
 }
 
+check_tool_installed() {
+    local tool_name=$1
+    local tool_path=$2
+    
+    # Check if tool is in PATH
+    if command -v "$tool_name" &> /dev/null; then
+        local tool_location=$(command -v "$tool_name")
+        log SUCCESS "$tool_name is already installed at: $tool_location"
+        return 0
+    fi
+    
+    # Check if tool is in local bin directory
+    if [ -n "$tool_path" ] && [ -f "$tool_path" ] && [ -x "$tool_path" ]; then
+        log SUCCESS "$tool_name is already installed at: $tool_path"
+        return 0
+    fi
+    
+    return 1
+}
+
 install_go_tool_remote() {
     local tool_name=$1
     local install_cmd=$2
+    
+    # Check if already installed
+    if check_tool_installed "$tool_name" "${LOCAL_BIN}/${tool_name}"; then
+        return 0
+    fi
     
     log INFO "Installing $tool_name via go install..."
     
@@ -459,8 +489,13 @@ main() {
     
     # 1. bbot - From README: pipx install bbot (or pip install bbot)
     log INFO "Installing bbot..."
-    local bbot_installed=false
-    if check_command "pipx"; then
+    
+    # Check if already installed
+    if check_command "bbot"; then
+        log SUCCESS "bbot is already installed at: $(command -v bbot)"
+    else
+        local bbot_installed=false
+        if check_command "pipx"; then
         log INFO "Trying pipx install bbot..."
         if pipx install bbot >>"$INSTALL_LOG" 2>&1; then
             bbot_installed=true
@@ -487,8 +522,13 @@ main() {
     
     # 2. wafw00f - From README: pip install wafw00f or pip install . from directory
     log INFO "Installing wafw00f..."
-    local wafw00f_installed=false
-    if [ -d "${TOOLS_DIR}/wafw00f-master/wafw00f-master" ]; then
+    
+    # Check if already installed
+    if check_command "wafw00f"; then
+        log SUCCESS "wafw00f is already installed at: $(command -v wafw00f)"
+    else
+        local wafw00f_installed=false
+        if [ -d "${TOOLS_DIR}/wafw00f-master/wafw00f-master" ]; then
         log INFO "Installing wafw00f from source directory..."
         if install_python_tool "wafw00f" "${TOOLS_DIR}/wafw00f-master/wafw00f-master" "setup_py"; then
             wafw00f_installed=true
@@ -517,96 +557,138 @@ main() {
     
     # 3. Logsensor - From README: pip install -r requirements.txt && ./install.sh
     log INFO "Installing Logsensor..."
-    local logsensor_installed=false
-    if [ -d "${TOOLS_DIR}/Logsensor-main/Logsensor-main" ]; then
-        log INFO "Installing Logsensor dependencies..."
-        if install_python_tool "logsensor" "${TOOLS_DIR}/Logsensor-main/Logsensor-main" "requirements"; then
-            logsensor_installed=true
-        fi
-        log INFO "Running Logsensor install.sh..."
-        if install_python_tool "logsensor" "${TOOLS_DIR}/Logsensor-main/Logsensor-main" "custom"; then
-            logsensor_installed=true
-        fi
-        # Create local symlink (the install.sh creates one in /usr/local/bin)
-        if [ -f "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py" ]; then
-            chmod +x "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py"
-            ln -sf "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py" "${LOCAL_BIN}/logsensor" 2>/dev/null || {
-                log WARNING "Could not create symlink for logsensor in ${LOCAL_BIN}"
-            }
+    
+    # Check if already installed
+    if check_command "logsensor" || [ -f "${LOCAL_BIN}/logsensor" ] || [ -f "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py" ]; then
+        if check_command "logsensor"; then
+            log SUCCESS "logsensor is already installed at: $(command -v logsensor)"
+        elif [ -f "${LOCAL_BIN}/logsensor" ]; then
+            log SUCCESS "logsensor is already available at: ${LOCAL_BIN}/logsensor"
+        elif [ -f "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py" ]; then
+            log SUCCESS "logsensor script is already available at: ${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py"
         fi
     else
-        log WARNING "Logsensor source directory not found: ${TOOLS_DIR}/Logsensor-main/Logsensor-main"
-        log WARNING "Cannot install Logsensor - source code missing"
-    fi
-    if check_command "logsensor" || [ -f "${LOCAL_BIN}/logsensor" ]; then
-        log SUCCESS "logsensor installed successfully"
-    elif [ "$logsensor_installed" = false ]; then
-        log WARNING "logsensor installation may have failed - check install.log"
-    else
-        log WARNING "logsensor installed but not found - you may need to use full path: ${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py"
+        local logsensor_installed=false
+        if [ -d "${TOOLS_DIR}/Logsensor-main/Logsensor-main" ]; then
+            log INFO "Installing Logsensor dependencies..."
+            if install_python_tool "logsensor" "${TOOLS_DIR}/Logsensor-main/Logsensor-main" "requirements"; then
+                logsensor_installed=true
+            fi
+            log INFO "Running Logsensor install.sh..."
+            if install_python_tool "logsensor" "${TOOLS_DIR}/Logsensor-main/Logsensor-main" "custom"; then
+                logsensor_installed=true
+            fi
+            # Create local symlink (the install.sh creates one in /usr/local/bin)
+            if [ -f "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py" ]; then
+                chmod +x "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py"
+                ln -sf "${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py" "${LOCAL_BIN}/logsensor" 2>/dev/null || {
+                    log WARNING "Could not create symlink for logsensor in ${LOCAL_BIN}"
+                }
+            fi
+            
+            if check_command "logsensor" || [ -f "${LOCAL_BIN}/logsensor" ]; then
+                log SUCCESS "logsensor installed successfully"
+            elif [ "$logsensor_installed" = false ]; then
+                log WARNING "logsensor installation may have failed - check install.log"
+            else
+                log WARNING "logsensor installed but not found - you may need to use full path: ${TOOLS_DIR}/Logsensor-main/Logsensor-main/logsensor.py"
+            fi
+        else
+            log WARNING "Logsensor source directory not found: ${TOOLS_DIR}/Logsensor-main/Logsensor-main"
+            log WARNING "Cannot install Logsensor - source code missing"
+        fi
     fi
     
     # 4. Corsy - From README: pip3 install requests
     log INFO "Installing Corsy..."
-    local corsy_installed=false
-    if [ -d "${TOOLS_DIR}/Corsy-master/Corsy-master" ]; then
-        if install_python_tool "Corsy" "${TOOLS_DIR}/Corsy-master/Corsy-master" "requirements"; then
-            corsy_installed=true
-        fi
-        # Make corsy.py executable
-        if [ -f "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py" ]; then
-            chmod +x "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
-            log SUCCESS "Corsy script is ready at ${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
-        else
-            log WARNING "Corsy script not found: ${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
-        fi
+    
+    # Check if already available
+    if check_command "corsy"; then
+        log SUCCESS "Corsy is already installed at: $(command -v corsy)"
+    elif [ -f "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py" ]; then
+        log SUCCESS "Corsy script is already available at: ${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
     else
-        log WARNING "Corsy source directory not found: ${TOOLS_DIR}/Corsy-master/Corsy-master"
-    fi
-    if [ "$corsy_installed" = false ]; then
-        log WARNING "Corsy dependencies installation may have failed - check install.log"
+        local corsy_installed=false
+        if [ -d "${TOOLS_DIR}/Corsy-master/Corsy-master" ]; then
+            if install_python_tool "Corsy" "${TOOLS_DIR}/Corsy-master/Corsy-master" "requirements"; then
+                corsy_installed=true
+            fi
+            # Make corsy.py executable
+            if [ -f "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py" ]; then
+                chmod +x "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
+                log SUCCESS "Corsy script is ready at ${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
+            else
+                log WARNING "Corsy script not found: ${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
+            fi
+            
+            if [ "$corsy_installed" = false ]; then
+                log WARNING "Corsy dependencies installation may have failed - check install.log"
+            fi
+        else
+            log WARNING "Corsy source directory not found: ${TOOLS_DIR}/Corsy-master/Corsy-master"
+        fi
     fi
     
     # 5. CSP-Stalker - From README: pip install -r requirements.txt
     log INFO "Installing CSP-Stalker..."
-    local csp_stalker_installed=false
-    if [ -d "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main" ]; then
-        if install_python_tool "CSP-Stalker" "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main" "requirements"; then
-            csp_stalker_installed=true
-        fi
-        # Make script executable
-        if [ -f "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py" ]; then
-            chmod +x "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
-            log SUCCESS "CSP-Stalker script is ready at ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
-        else
-            log WARNING "CSP-Stalker script not found: ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
-        fi
+    
+    # Check if already available
+    if check_command "csp-stalker" || check_command "cli_CSP_Stalker"; then
+        log SUCCESS "CSP-Stalker is already installed at: $(command -v csp-stalker 2>/dev/null || command -v cli_CSP_Stalker 2>/dev/null || echo 'PATH')"
+    elif [ -f "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py" ]; then
+        log SUCCESS "CSP-Stalker script is already available at: ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
     else
-        log WARNING "CSP-Stalker source directory not found: ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main"
-    fi
-    if [ "$csp_stalker_installed" = false ]; then
-        log WARNING "CSP-Stalker dependencies installation may have failed - check install.log"
+        local csp_stalker_installed=false
+        if [ -d "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main" ]; then
+            if install_python_tool "CSP-Stalker" "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main" "requirements"; then
+                csp_stalker_installed=true
+            fi
+            # Make script executable
+            if [ -f "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py" ]; then
+                chmod +x "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
+                log SUCCESS "CSP-Stalker script is ready at ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
+            else
+                log WARNING "CSP-Stalker script not found: ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py"
+            fi
+            
+            if [ "$csp_stalker_installed" = false ]; then
+                log WARNING "CSP-Stalker dependencies installation may have failed - check install.log"
+            fi
+        else
+            log WARNING "CSP-Stalker source directory not found: ${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main"
+        fi
     fi
     
     # 6. favicorn (Python version) - From README: has requirements.txt
     log INFO "Installing favicorn (Python version)..."
-    local favicorn_py_installed=false
-    if [ -d "${TOOLS_DIR}/favicorn-main/favicorn-main" ]; then
-        if install_python_tool "favicorn" "${TOOLS_DIR}/favicorn-main/favicorn-main" "requirements"; then
-            favicorn_py_installed=true
-        fi
-        # Make script executable
-        if [ -f "${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py" ]; then
-            chmod +x "${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
-            log SUCCESS "favicorn (Python) script is ready at ${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
-        else
-            log WARNING "favicorn (Python) script not found: ${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
+    
+    # Check if already available
+    if [ -f "${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py" ] || command -v favicorn &> /dev/null; then
+        if command -v favicorn &> /dev/null; then
+            log SUCCESS "favicorn (Python) is already installed at: $(command -v favicorn)"
+        elif [ -f "${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py" ]; then
+            log SUCCESS "favicorn (Python) script is already available at: ${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
         fi
     else
-        log WARNING "favicorn (Python) source directory not found: ${TOOLS_DIR}/favicorn-main/favicorn-main"
-    fi
-    if [ "$favicorn_py_installed" = false ]; then
-        log WARNING "favicorn (Python) dependencies installation may have failed - check install.log"
+        local favicorn_py_installed=false
+        if [ -d "${TOOLS_DIR}/favicorn-main/favicorn-main" ]; then
+            if install_python_tool "favicorn" "${TOOLS_DIR}/favicorn-main/favicorn-main" "requirements"; then
+                favicorn_py_installed=true
+            fi
+            # Make script executable
+            if [ -f "${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py" ]; then
+                chmod +x "${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
+                log SUCCESS "favicorn (Python) script is ready at ${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
+            else
+                log WARNING "favicorn (Python) script not found: ${TOOLS_DIR}/favicorn-main/favicorn-main/favicorn.py"
+            fi
+            
+            if [ "$favicorn_py_installed" = false ]; then
+                log WARNING "favicorn (Python) dependencies installation may have failed - check install.log"
+            fi
+        else
+            log WARNING "favicorn (Python) source directory not found: ${TOOLS_DIR}/favicorn-main/favicorn-main"
+        fi
     fi
     
     # 7. JSMap-Inspector - This is an HTML tool, not a CLI, skip installation
@@ -666,17 +748,26 @@ main() {
     fi
     
     # Check Python scripts that need to be run directly
-    if [ -f "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py" ]; then
+    if check_command "corsy"; then
+        log SUCCESS "Corsy: ✓ (installed at $(command -v corsy))"
+    elif [ -f "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py" ]; then
         log SUCCESS "Corsy: ✓ (script available)"
     else
-        log WARNING "Corsy: ✗ (script not found)"
+        log WARNING "Corsy: ✗ (not found)"
         missing_tools+=("Corsy")
     fi
     
-    if [ -f "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py" ]; then
+    if check_command "csp-stalker" || check_command "cli_CSP_Stalker"; then
+        local csp_cmd=$(command -v csp-stalker 2>/dev/null || command -v cli_CSP_Stalker 2>/dev/null || echo "")
+        if [ -n "$csp_cmd" ]; then
+            log SUCCESS "CSP-Stalker: ✓ (installed at $csp_cmd)"
+        else
+            log SUCCESS "CSP-Stalker: ✓ (installed in PATH)"
+        fi
+    elif [ -f "${TOOLS_DIR}/CSP-Stalker-main/CSP-Stalker-main/cli_CSP_Stalker.py" ]; then
         log SUCCESS "CSP-Stalker: ✓ (script available)"
     else
-        log WARNING "CSP-Stalker: ✗ (script not found)"
+        log WARNING "CSP-Stalker: ✗ (not found)"
         missing_tools+=("CSP-Stalker")
     fi
     

@@ -26,6 +26,7 @@ TARGET=""
 OUTPUT_DIR=""
 PASSIVE_MODE=false
 UPDATE_TOOLS=false
+VERBOSE=false
 CONFIG_FILE="config/api_keys.conf"
 TOOLS_DIR="tools"
 DELAY_MIN=0.3
@@ -81,6 +82,11 @@ log() {
                 echo -e "${BOLD}${CYAN}  $message${NC}" | tee -a "$log_file"
                 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════════${NC}\n" | tee -a "$log_file"
                 ;;
+            DEBUG)
+                if [ "$VERBOSE" = true ]; then
+                    echo -e "${MAGENTA}[DEBUG]${NC} $message" | tee -a "$log_file"
+                fi
+                ;;
         esac
         
         echo "[$timestamp] [$level] $message" >> "$log_file"
@@ -104,6 +110,11 @@ log() {
                 echo -e "${BOLD}${CYAN}  $message${NC}"
                 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════════════════${NC}\n"
                 ;;
+            DEBUG)
+                if [ "$VERBOSE" = true ]; then
+                    echo -e "${MAGENTA}[DEBUG]${NC} $message"
+                fi
+                ;;
         esac
     fi
 }
@@ -116,7 +127,36 @@ get_random_user_agent() {
 
 random_delay() {
     local delay=$(awk "BEGIN {printf \"%.2f\", $DELAY_MIN + ($DELAY_MAX - $DELAY_MIN) * rand()}")
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Delaying ${delay}s before next operation"
+    fi
     sleep "$delay"
+}
+
+# Helper function to handle command output based on verbose mode
+run_command() {
+    local cmd="$@"
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Executing: $cmd"
+        eval "$cmd"
+    else
+        eval "$cmd" 2>/dev/null || true
+    fi
+}
+
+# Helper function to handle command output with file redirection
+run_command_silent() {
+    local cmd="$1"
+    local output_file="$2"
+    shift 2
+    local args="$@"
+    
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Executing: $cmd $args > $output_file"
+        eval "$cmd $args" > "$output_file" 2>&1 || true
+    else
+        eval "$cmd $args" > "$output_file" 2>/dev/null || true
+    fi
 }
 
 check_tool() {
@@ -279,8 +319,16 @@ phase0_asn_discovery() {
         return
     fi
     
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Using asnmap: $asnmap_cmd"
+    fi
+    
     if ! check_tool "ipranges" "ipranges_cmd"; then
         log WARNING "ipranges not found, skipping cloud detection"
+    else
+        if [ "$VERBOSE" = true ]; then
+            log DEBUG "Using ipranges: $ipranges_cmd"
+        fi
     fi
     
     log INFO "Discovering ASN information for $TARGET"
@@ -291,18 +339,29 @@ phase0_asn_discovery() {
     
     if [ -n "$asnmap_cmd" ]; then
         log INFO "Running asnmap..."
-        "$asnmap_cmd" -d "$domain" -o "${OUTPUT_DIR}/asn_results.txt" 2>/dev/null || true
+        if [ "$VERBOSE" = true ]; then
+            "$asnmap_cmd" -d "$domain" -o "${OUTPUT_DIR}/asn_results.txt" || true
+        else
+            "$asnmap_cmd" -d "$domain" -o "${OUTPUT_DIR}/asn_results.txt" 2>/dev/null || true
+        fi
         if [ -f "${OUTPUT_DIR}/asn_results.txt" ] && [ -s "${OUTPUT_DIR}/asn_results.txt" ]; then
-            log SUCCESS "ASN information saved to asn_results.txt"
+            local asn_count=$(wc -l < "${OUTPUT_DIR}/asn_results.txt" 2>/dev/null || echo "0")
+            log SUCCESS "ASN information saved to asn_results.txt ($asn_count entries)"
+            [ "$VERBOSE" = true ] && log DEBUG "ASN results: $(head -3 "${OUTPUT_DIR}/asn_results.txt" 2>/dev/null | tr '\n' '; ')"
         fi
     fi
     
     if [ -n "$ipranges_cmd" ]; then
         log INFO "Checking cloud infrastructure..."
         random_delay
-        "$ipranges_cmd" -d "$domain" -o "${OUTPUT_DIR}/cloud_ranges.txt" 2>/dev/null || true
+        if [ "$VERBOSE" = true ]; then
+            "$ipranges_cmd" -d "$domain" -o "${OUTPUT_DIR}/cloud_ranges.txt" || true
+        else
+            "$ipranges_cmd" -d "$domain" -o "${OUTPUT_DIR}/cloud_ranges.txt" 2>/dev/null || true
+        fi
         if [ -f "${OUTPUT_DIR}/cloud_ranges.txt" ] && [ -s "${OUTPUT_DIR}/cloud_ranges.txt" ]; then
             log SUCCESS "Cloud infrastructure information saved"
+            [ "$VERBOSE" = true ] && log DEBUG "Cloud ranges: $(head -3 "${OUTPUT_DIR}/cloud_ranges.txt" 2>/dev/null | tr '\n' '; ')"
         fi
     fi
 }
@@ -333,9 +392,15 @@ phase1_subdomain_discovery() {
     
     if [ -n "${GITHUB_TOKEN:-}" ]; then
         subfinder_flags="$subfinder_flags -pc ~/.config/subfinder/provider-config.yaml"
+        [ "$VERBOSE" = true ] && log DEBUG "Using GitHub token for subfinder"
     fi
     
-    "$subfinder_cmd" $subfinder_flags 2>/dev/null || "$subfinder_cmd" -d "$domain" -o "${OUTPUT_DIR}/subfinder_results.txt" 2>/dev/null || true
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Running: $subfinder_cmd $subfinder_flags"
+        "$subfinder_cmd" $subfinder_flags || "$subfinder_cmd" -d "$domain" -o "${OUTPUT_DIR}/subfinder_results.txt" || true
+    else
+        "$subfinder_cmd" $subfinder_flags 2>/dev/null || "$subfinder_cmd" -d "$domain" -o "${OUTPUT_DIR}/subfinder_results.txt" 2>/dev/null || true
+    fi
     random_delay
     
     # BBOT - Deep enumeration (if not in passive mode)
@@ -355,6 +420,12 @@ phase1_subdomain_discovery() {
     
     STATS_SUBDOMAINS=$(wc -l < "${OUTPUT_DIR}/all_subdomains.txt" 2>/dev/null || echo "0")
     log SUCCESS "Found $STATS_SUBDOMAINS unique subdomains"
+    
+    if [ "$VERBOSE" = true ] && [ "$STATS_SUBDOMAINS" -gt 0 ] && [ "$STATS_SUBDOMAINS" -le 20 ]; then
+        log DEBUG "Subdomains found: $(cat "${OUTPUT_DIR}/all_subdomains.txt" 2>/dev/null | tr '\n' ' ')"
+    elif [ "$VERBOSE" = true ] && [ "$STATS_SUBDOMAINS" -gt 20 ]; then
+        log DEBUG "First 10 subdomains: $(head -10 "${OUTPUT_DIR}/all_subdomains.txt" 2>/dev/null | tr '\n' ' ')"
+    fi
 }
 
 ###############################################################################
@@ -376,21 +447,37 @@ phase2_port_scanning() {
     if [ -n "${SHODAN_API_KEY:-}" ] && check_tool "smap" "smap_cmd"; then
         log INFO "Running passive port scan with Smap (Shodan)..."
         export SHODAN_API_KEY
+        [ "$VERBOSE" = true ] && log DEBUG "Using Shodan API key for passive scanning"
         random_delay
-        "$smap_cmd" -iL "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/smap_results.txt" 2>/dev/null || true
-        if [ -f "${OUTPUT_DIR}/smap_results.txt" ] && [ -s "${OUTPUT_DIR}/smap_results.txt" ]; then
-            log SUCCESS "Passive scan results saved"
+        if [ "$VERBOSE" = true ]; then
+            "$smap_cmd" -iL "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/smap_results.txt" || true
+        else
+            "$smap_cmd" -iL "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/smap_results.txt" 2>/dev/null || true
         fi
+        if [ -f "${OUTPUT_DIR}/smap_results.txt" ] && [ -s "${OUTPUT_DIR}/smap_results.txt" ]; then
+            local smap_count=$(wc -l < "${OUTPUT_DIR}/smap_results.txt" 2>/dev/null || echo "0")
+            log SUCCESS "Passive scan results saved ($smap_count entries)"
+        fi
+    elif [ "$VERBOSE" = true ] && [ -z "${SHODAN_API_KEY:-}" ]; then
+        log DEBUG "Skipping Smap: SHODAN_API_KEY not configured"
     fi
     
     # Active scanning with Naabu (if not in passive mode)
     if [ "$PASSIVE_MODE" = false ] && check_tool "naabu" "naabu_cmd"; then
         log INFO "Running active port scan with Naabu..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using naabu: $naabu_cmd"
         random_delay
-        "$naabu_cmd" -l "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/naabu_results.txt" -rate 1000 2>/dev/null || true
-        if [ -f "${OUTPUT_DIR}/naabu_results.txt" ] && [ -s "${OUTPUT_DIR}/naabu_results.txt" ]; then
-            log SUCCESS "Active scan results saved"
+        if [ "$VERBOSE" = true ]; then
+            "$naabu_cmd" -l "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/naabu_results.txt" -rate 1000 || true
+        else
+            "$naabu_cmd" -l "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/naabu_results.txt" -rate 1000 2>/dev/null || true
         fi
+        if [ -f "${OUTPUT_DIR}/naabu_results.txt" ] && [ -s "${OUTPUT_DIR}/naabu_results.txt" ]; then
+            local naabu_count=$(wc -l < "${OUTPUT_DIR}/naabu_results.txt" 2>/dev/null || echo "0")
+            log SUCCESS "Active scan results saved ($naabu_count entries)"
+        fi
+    elif [ "$VERBOSE" = true ] && [ "$PASSIVE_MODE" = true ]; then
+        log DEBUG "Skipping Naabu: Passive mode enabled"
     fi
     
     # Merge port scan results
@@ -436,14 +523,25 @@ phase3_http_probing() {
     random_delay
     
     local user_agent=$(get_random_user_agent)
+    [ "$VERBOSE" = true ] && log DEBUG "Using User-Agent: $user_agent"
     
     # HTTP probing with httpx
-    "$httpx_cmd" -l "$input_file" \
-        -title -tech-detect -status-code -content-length -server \
-        -H "User-Agent: $user_agent" \
-        -o "${OUTPUT_DIR}/httpx_results.txt" \
-        -json -oJ "${OUTPUT_DIR}/httpx_results.json" \
-        -rate-limit 50 2>/dev/null || true
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Running httpx on $(wc -l < "$input_file" 2>/dev/null || echo "0") targets"
+        "$httpx_cmd" -l "$input_file" \
+            -title -tech-detect -status-code -content-length -server \
+            -H "User-Agent: $user_agent" \
+            -o "${OUTPUT_DIR}/httpx_results.txt" \
+            -json -oJ "${OUTPUT_DIR}/httpx_results.json" \
+            -rate-limit 50 || true
+    else
+        "$httpx_cmd" -l "$input_file" \
+            -title -tech-detect -status-code -content-length -server \
+            -H "User-Agent: $user_agent" \
+            -o "${OUTPUT_DIR}/httpx_results.txt" \
+            -json -oJ "${OUTPUT_DIR}/httpx_results.json" \
+            -rate-limit 50 2>/dev/null || true
+    fi
     
     random_delay
     
@@ -457,19 +555,32 @@ phase3_http_probing() {
     # WAF Detection
     if check_tool "wafw00f" "wafw00f_cmd"; then
         log INFO "Detecting WAFs..."
+        [ "$VERBOSE" = true ] && log DEBUG "Scanning $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs for WAFs"
         random_delay
+        local url_count=0
         while IFS= read -r url; do
             random_delay
+            url_count=$((url_count + 1))
+            [ "$VERBOSE" = true ] && [ $((url_count % 10)) -eq 0 ] && log DEBUG "WAF detection progress: $url_count URLs processed"
             if [[ "$wafw00f_cmd" == *"python3 -m wafw00f"* ]] || [[ "$wafw00f_cmd" == *"python -m wafw00f"* ]]; then
-                $wafw00f_cmd "$url" 2>/dev/null | grep -i "waf\|detected" >> "${OUTPUT_DIR}/waf_results.txt" || true
+                if [ "$VERBOSE" = true ]; then
+                    $wafw00f_cmd "$url" | grep -i "waf\|detected" >> "${OUTPUT_DIR}/waf_results.txt" || true
+                else
+                    $wafw00f_cmd "$url" 2>/dev/null | grep -i "waf\|detected" >> "${OUTPUT_DIR}/waf_results.txt" || true
+                fi
             elif command -v wafw00f &> /dev/null; then
-                wafw00f "$url" 2>/dev/null | grep -i "waf\|detected" >> "${OUTPUT_DIR}/waf_results.txt" || true
+                if [ "$VERBOSE" = true ]; then
+                    wafw00f "$url" | grep -i "waf\|detected" >> "${OUTPUT_DIR}/waf_results.txt" || true
+                else
+                    wafw00f "$url" 2>/dev/null | grep -i "waf\|detected" >> "${OUTPUT_DIR}/waf_results.txt" || true
+                fi
             fi
         done < "${OUTPUT_DIR}/http_urls.txt"
         
         if [ -f "${OUTPUT_DIR}/waf_results.txt" ] && [ -s "${OUTPUT_DIR}/waf_results.txt" ]; then
             STATS_WAF=$(grep -c "detected\|waf" "${OUTPUT_DIR}/waf_results.txt" 2>/dev/null || echo "0")
-            log SUCCESS "WAF detection completed"
+            log SUCCESS "WAF detection completed ($STATS_WAF WAFs detected)"
+            [ "$VERBOSE" = true ] && log DEBUG "WAF results: $(head -5 "${OUTPUT_DIR}/waf_results.txt" 2>/dev/null | tr '\n' '; ')"
         fi
     fi
     
@@ -506,17 +617,29 @@ phase4_deep_crawling() {
     # GAU - Get All URLs from Wayback Machine
     if check_tool "gau" "gau_cmd"; then
         log INFO "Fetching historical URLs with GAU..."
+        [ "$VERBOSE" = true ] && log DEBUG "Processing $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs with GAU"
         random_delay
+        local gau_count=0
         while IFS= read -r url; do
             random_delay
-            echo "$url" | "$gau_cmd" 2>/dev/null | \
-                grep -E "\.(xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar\.gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|gz|config|csv|yaml|md|md5|tar|xz|7zip|p12|pem|key|crt|csr|sh|pl|py|java|class|jar|war|ear|sqlitedb|sqlite3|dbf|db3|accdb|mdb|sqlcipher|gitignore|env|ini|conf|properties|plist|cfg)$" \
-                >> "${OUTPUT_DIR}/gau_sensitive_files.txt" 2>/dev/null || true
+            gau_count=$((gau_count + 1))
+            [ "$VERBOSE" = true ] && [ $((gau_count % 5)) -eq 0 ] && log DEBUG "GAU progress: $gau_count URLs processed"
+            if [ "$VERBOSE" = true ]; then
+                echo "$url" | "$gau_cmd" | \
+                    grep -E "\.(xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar\.gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|gz|config|csv|yaml|md|md5|tar|xz|7zip|p12|pem|key|crt|csr|sh|pl|py|java|class|jar|war|ear|sqlitedb|sqlite3|dbf|db3|accdb|mdb|sqlcipher|gitignore|env|ini|conf|properties|plist|cfg)$" \
+                    >> "${OUTPUT_DIR}/gau_sensitive_files.txt" || true
+            else
+                echo "$url" | "$gau_cmd" 2>/dev/null | \
+                    grep -E "\.(xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar\.gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|gz|config|csv|yaml|md|md5|tar|xz|7zip|p12|pem|key|crt|csr|sh|pl|py|java|class|jar|war|ear|sqlitedb|sqlite3|dbf|db3|accdb|mdb|sqlcipher|gitignore|env|ini|conf|properties|plist|cfg)$" \
+                    >> "${OUTPUT_DIR}/gau_sensitive_files.txt" 2>/dev/null || true
+            fi
         done < "${OUTPUT_DIR}/http_urls.txt"
         
         if [ -f "${OUTPUT_DIR}/gau_sensitive_files.txt" ] && [ -s "${OUTPUT_DIR}/gau_sensitive_files.txt" ]; then
             sort -u "${OUTPUT_DIR}/gau_sensitive_files.txt" -o "${OUTPUT_DIR}/gau_sensitive_files.txt"
-            log SUCCESS "Found sensitive files from Wayback Machine"
+            local sensitive_count=$(wc -l < "${OUTPUT_DIR}/gau_sensitive_files.txt" 2>/dev/null || echo "0")
+            log SUCCESS "Found sensitive files from Wayback Machine ($sensitive_count files)"
+            [ "$VERBOSE" = true ] && log DEBUG "Sample sensitive files: $(head -5 "${OUTPUT_DIR}/gau_sensitive_files.txt" 2>/dev/null | tr '\n' '; ')"
         fi
     fi
     
@@ -581,17 +704,33 @@ phase5_vulnerability_scanning() {
     # 403 Bypass attempts
     if [ -f "${OUTPUT_DIR}/403_urls.txt" ] && [ -s "${OUTPUT_DIR}/403_urls.txt" ]; then
         if check_tool "403jump" "jump403_cmd"; then
-            log INFO "Attempting 403 bypasses..."
+            local bypass_count=$(wc -l < "${OUTPUT_DIR}/403_urls.txt" 2>/dev/null || echo "0")
+            log INFO "Attempting 403 bypasses on $bypass_count URLs..."
+            [ "$VERBOSE" = true ] && log DEBUG "Using 403jump: $jump403_cmd"
             random_delay
+            local processed=0
             while IFS= read -r url; do
                 random_delay
+                processed=$((processed + 1))
+                [ "$VERBOSE" = true ] && [ $((processed % 5)) -eq 0 ] && log DEBUG "403 bypass progress: $processed/$bypass_count URLs"
                 if [[ "$jump403_cmd" == *.py ]]; then
-                    python3 "$jump403_cmd" -u "$url" >> "${OUTPUT_DIR}/403_bypass_results.txt" 2>/dev/null || true
+                    if [ "$VERBOSE" = true ]; then
+                        python3 "$jump403_cmd" -u "$url" >> "${OUTPUT_DIR}/403_bypass_results.txt" || true
+                    else
+                        python3 "$jump403_cmd" -u "$url" >> "${OUTPUT_DIR}/403_bypass_results.txt" 2>/dev/null || true
+                    fi
                 else
-                    "$jump403_cmd" -u "$url" >> "${OUTPUT_DIR}/403_bypass_results.txt" 2>/dev/null || true
+                    if [ "$VERBOSE" = true ]; then
+                        "$jump403_cmd" -u "$url" >> "${OUTPUT_DIR}/403_bypass_results.txt" || true
+                    else
+                        "$jump403_cmd" -u "$url" >> "${OUTPUT_DIR}/403_bypass_results.txt" 2>/dev/null || true
+                    fi
                 fi
             done < "${OUTPUT_DIR}/403_urls.txt"
+            [ "$VERBOSE" = true ] && log DEBUG "403 bypass attempts completed"
         fi
+    elif [ "$VERBOSE" = true ]; then
+        log DEBUG "No 403 URLs found, skipping bypass attempts"
     fi
     
     # Login panel detection
@@ -1277,6 +1416,10 @@ main() {
                 PASSIVE_MODE=true
                 shift
                 ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
             -up|--update)
                 UPDATE_TOOLS=true
                 shift
@@ -1289,12 +1432,14 @@ Options:
     -t, --target TARGET    Target domain or URL (required)
     -o, --output DIR      Output directory for results (required)
     -p, --passive         Enable passive mode (no active scanning)
+    -v, --verbose         Enable verbose mode (show detailed output)
     -up, --update         Show tool update information
     -h, --help            Show this help message
 
 Examples:
     $SCRIPT_NAME -t example.com -o ./results
     $SCRIPT_NAME -t https://example.com -o ./recon_results --passive
+    $SCRIPT_NAME -t example.com -o ./results --verbose
 
 EOF
                 exit 0
@@ -1329,6 +1474,15 @@ EOF
     log INFO "Starting reconnaissance pipeline for: $TARGET"
     log INFO "Output directory: $OUTPUT_DIR"
     [ "$PASSIVE_MODE" = true ] && log INFO "Passive mode: ENABLED"
+    [ "$VERBOSE" = true ] && log INFO "Verbose mode: ENABLED"
+    
+    if [ "$VERBOSE" = true ]; then
+        log DEBUG "Script version: $VERSION"
+        log DEBUG "Tools directory: $TOOLS_DIR"
+        log DEBUG "Config file: $CONFIG_FILE"
+        log DEBUG "Delay range: ${DELAY_MIN}-${DELAY_MAX} seconds"
+        log DEBUG "User agent rotation: ${#USER_AGENTS[@]} agents available"
+    fi
     
     # Execute phases
     phase0_asn_discovery
