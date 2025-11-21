@@ -171,10 +171,15 @@ install_python_tool() {
     # Check for requirements.txt
     if [ -f "$TOOLS_DIR/$tool_dir/requirements.txt" ]; then
         log INFO "Installing Python dependencies for $tool_name..."
-        if pip3 install -r "$TOOLS_DIR/$tool_dir/requirements.txt" 2>&1 | tee -a install.log; then
+        
+        # Use --break-system-packages for Kali Linux / Debian managed environments
+        if pip3 install --break-system-packages -r "$TOOLS_DIR/$tool_dir/requirements.txt" 2>&1 | tee -a install.log; then
             log SUCCESS "Dependencies installed for $tool_name"
         else
-            log WARNING "Some dependencies may have failed for $tool_name"
+            log WARNING "Python package installation failed for $tool_name"
+            log INFO "To install manually, run:"
+            log INFO "  cd $TOOLS_DIR/$tool_dir"
+            log INFO "  pip3 install --break-system-packages -r requirements.txt"
         fi
     fi
     
@@ -182,10 +187,13 @@ install_python_tool() {
     if [ -f "$TOOLS_DIR/$tool_dir/setup.py" ]; then
         log INFO "Running setup.py for $tool_name..."
         cd "$TOOLS_DIR/$tool_dir"
-        if python3 setup.py install --user 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
+        
+        # Use pip3 install with --break-system-packages
+        if pip3 install --break-system-packages -e . 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
             log SUCCESS "setup.py completed for $tool_name"
         else
             log WARNING "setup.py install may have failed for $tool_name"
+            log INFO "The tool may still be usable from $TOOLS_DIR/$tool_dir"
         fi
         cd "$SCRIPT_DIR"
     fi
@@ -266,7 +274,38 @@ main() {
     # Go tools (Other)
     install_go_tool "edoardottt/cariddi" "cariddi" "$TOOLS_DIR/cariddi/cariddi"
     install_go_tool "sharsil/favicorn" "favicorn" "$TOOLS_DIR/favicorn/favicorn"
-    install_go_tool "lord-alfred/ipranges" "ipranges" "$TOOLS_DIR/ipranges/ipranges"
+    
+    # ipranges - special handling due to network issues
+    log INFO "Installing ipranges..."
+    if check_command "ipranges"; then
+        log SUCCESS "ipranges is already installed at: $(command -v ipranges)"
+    else
+        if [ ! -d "$TOOLS_DIR/ipranges" ]; then
+            log INFO "Cloning lord-alfred/ipranges..."
+            if git clone "https://github.com/lord-alfred/ipranges.git" "$TOOLS_DIR/ipranges" 2>&1 | tee -a install.log; then
+                log SUCCESS "ipranges cloned successfully"
+            else
+                log ERROR "Failed to clone ipranges"
+            fi
+        fi
+        
+        if [ -d "$TOOLS_DIR/ipranges" ]; then
+            log INFO "Building ipranges from source..."
+            cd "$TOOLS_DIR/ipranges"
+            if go build -o ipranges . 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
+                # Copy to go bin or local bin
+                local go_bin=$(go env GOPATH)/bin
+                if [ -d "$go_bin" ]; then
+                    cp ipranges "$go_bin/" 2>/dev/null && log SUCCESS "ipranges installed to $go_bin/ipranges"
+                else
+                    log SUCCESS "ipranges built at $TOOLS_DIR/ipranges/ipranges"
+                fi
+            else
+                log WARNING "Failed to build ipranges from source"
+            fi
+            cd "$SCRIPT_DIR"
+        fi
+    fi
     
     # Python tools
     log INFO ""
@@ -304,7 +343,8 @@ main() {
     fi
     
     if [ -f "$TOOLS_DIR/Smap/requirements.txt" ]; then
-        pip3 install -r "$TOOLS_DIR/Smap/requirements.txt" 2>&1 | tee -a install.log || true
+        log INFO "Installing Smap dependencies..."
+        pip3 install --break-system-packages -r "$TOOLS_DIR/Smap/requirements.txt" 2>&1 | tee -a install.log || true
     fi
     
     if [ -f "$TOOLS_DIR/Smap/smap.py" ]; then
