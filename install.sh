@@ -6,7 +6,8 @@
 # installation instructions from their README files
 ###############################################################################
 
-set -uo pipefail
+set -u
+set -o pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -496,28 +497,30 @@ main() {
     else
         local bbot_installed=false
         if check_command "pipx"; then
-        log INFO "Trying pipx install bbot..."
-        if pipx install bbot >>"$INSTALL_LOG" 2>&1; then
-            bbot_installed=true
+            log INFO "Trying pipx install bbot..."
+            if pipx install bbot >>"$INSTALL_LOG" 2>&1; then
+                bbot_installed=true
+            else
+                log WARNING "pipx installation failed, trying pip..."
+                if pip3 install bbot >>"$INSTALL_LOG" 2>&1; then
+                    bbot_installed=true
+                fi
+            fi
         else
-            log WARNING "pipx installation failed, trying pip..."
+            log INFO "pipx not found, using pip..."
             if pip3 install bbot >>"$INSTALL_LOG" 2>&1; then
                 bbot_installed=true
             fi
         fi
-    else
-        log INFO "pipx not found, using pip..."
-        if pip3 install bbot >>"$INSTALL_LOG" 2>&1; then
-            bbot_installed=true
+        
+        if check_command "bbot"; then
+            log SUCCESS "bbot installed successfully"
+        elif [ "$bbot_installed" = false ]; then
+            log WARNING "bbot installation failed - check install.log for details"
+            log WARNING "You may need to install bbot manually: pip3 install bbot"
+        else
+            log WARNING "bbot installed but not found in PATH - you may need to reload your shell"
         fi
-    fi
-    if check_command "bbot"; then
-        log SUCCESS "bbot installed successfully"
-    elif [ "$bbot_installed" = false ]; then
-        log WARNING "bbot installation failed - check install.log for details"
-        log WARNING "You may need to install bbot manually: pip3 install bbot"
-    else
-        log WARNING "bbot installed but not found in PATH - you may need to reload your shell"
     fi
     
     # 2. wafw00f - From README: pip install wafw00f or pip install . from directory
@@ -529,30 +532,32 @@ main() {
     else
         local wafw00f_installed=false
         if [ -d "${TOOLS_DIR}/wafw00f-master/wafw00f-master" ]; then
-        log INFO "Installing wafw00f from source directory..."
-        if install_python_tool "wafw00f" "${TOOLS_DIR}/wafw00f-master/wafw00f-master" "setup_py"; then
-            wafw00f_installed=true
-        fi
-        # Also try pip install as fallback
-        if ! $wafw00f_installed; then
-            log INFO "Trying pip install wafw00f..."
+            log INFO "Installing wafw00f from source directory..."
+            if install_python_tool "wafw00f" "${TOOLS_DIR}/wafw00f-master/wafw00f-master" "setup_py"; then
+                wafw00f_installed=true
+            fi
+            # Also try pip install as fallback
+            if [ "$wafw00f_installed" = false ]; then
+                log INFO "Trying pip install wafw00f..."
+                if pip3 install wafw00f >>"$INSTALL_LOG" 2>&1; then
+                    wafw00f_installed=true
+                fi
+            fi
+        else
+            log INFO "Source directory not found, installing via pip..."
             if pip3 install wafw00f >>"$INSTALL_LOG" 2>&1; then
                 wafw00f_installed=true
             fi
         fi
-    else
-        log INFO "Source directory not found, installing via pip..."
-        if pip3 install wafw00f >>"$INSTALL_LOG" 2>&1; then
-            wafw00f_installed=true
+        
+        if check_command "wafw00f"; then
+            log SUCCESS "wafw00f installed successfully"
+        elif [ "$wafw00f_installed" = false ]; then
+            log WARNING "wafw00f installation failed - check install.log for details"
+            log WARNING "You may need to install manually: pip3 install wafw00f"
+        else
+            log WARNING "wafw00f installed but not found in PATH - you may need to reload your shell"
         fi
-    fi
-    if check_command "wafw00f"; then
-        log SUCCESS "wafw00f installed successfully"
-    elif [ "$wafw00f_installed" = false ]; then
-        log WARNING "wafw00f installation failed - check install.log for details"
-        log WARNING "You may need to install manually: pip3 install wafw00f"
-    else
-        log WARNING "wafw00f installed but not found in PATH - you may need to reload your shell"
     fi
     
     # 3. Logsensor - From README: pip install -r requirements.txt && ./install.sh
