@@ -70,27 +70,42 @@ install_go_tool() {
     local tool_name=$2
     local install_path=$3
     
-    log INFO "Installing $tool_name from $repo"
+    # Check if tool is already installed in PATH
+    if check_command "$tool_name"; then
+        log SUCCESS "$tool_name is already installed at: $(command -v $tool_name)"
+        if [ "$UPDATE_MODE" = false ]; then
+            return 0
+        else
+            log INFO "Update mode: checking for updates..."
+        fi
+    fi
     
+    # Update mode: pull latest changes
     if [ "$UPDATE_MODE" = true ] && [ -d "$TOOLS_DIR/$tool_name" ]; then
-        log INFO "Updating $tool_name..."
+        log INFO "Updating $tool_name repository..."
         cd "$TOOLS_DIR/$tool_name" && git pull && cd "$SCRIPT_DIR" || true
     fi
     
+    # Clone repository if not exists
     if [ ! -d "$TOOLS_DIR/$tool_name" ]; then
         log INFO "Cloning $repo..."
-        git clone "https://github.com/$repo.git" "$TOOLS_DIR/$tool_name" || {
-            log ERROR "Failed to clone $repo"
+        if ! git clone "https://github.com/$repo.git" "$TOOLS_DIR/$tool_name" 2>&1 | tee -a install.log; then
+            log ERROR "Failed to clone $repo (network error or repo not found)"
+            log WARNING "Skipping $tool_name installation. You can install it manually later."
             return 1
-        }
+        fi
+    else
+        log INFO "$tool_name repository already exists at $TOOLS_DIR/$tool_name"
     fi
     
-    if check_command "$tool_name"; then
-        log SUCCESS "$tool_name is already installed at: $(command -v $tool_name)"
+    # If tool is already in PATH and we're not in update mode, skip build
+    if check_command "$tool_name" && [ "$UPDATE_MODE" = false ]; then
+        log SUCCESS "$tool_name is ready"
         return 0
     fi
     
-    log INFO "Building $tool_name..."
+    # Try to install/update via go install
+    log INFO "Installing/updating $tool_name via go install..."
     if go install "github.com/$repo/cmd/$tool_name@latest" 2>&1 | tee -a install.log; then
         log SUCCESS "$tool_name installed successfully"
         return 0
@@ -101,14 +116,20 @@ install_go_tool() {
         if [ -f "$TOOLS_DIR/$tool_name/go.mod" ] || [ -f "$TOOLS_DIR/$tool_name/main.go" ]; then
             cd "$TOOLS_DIR/$tool_name"
             if go build -o "$install_path" . 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
-                log SUCCESS "$tool_name built successfully"
+                log SUCCESS "$tool_name built successfully at $install_path"
                 cd "$SCRIPT_DIR"
                 return 0
             fi
             cd "$SCRIPT_DIR"
         fi
         
-        log ERROR "Failed to install $tool_name. Please install manually."
+        # Check one more time if it's installed (sometimes go install succeeds despite error output)
+        if check_command "$tool_name"; then
+            log SUCCESS "$tool_name is available"
+            return 0
+        fi
+        
+        log ERROR "Failed to install $tool_name. Please install manually or try again later."
         return 1
     fi
 }
@@ -118,40 +139,65 @@ install_python_tool() {
     local tool_name=$2
     local tool_dir=$3
     
-    log INFO "Installing $tool_name from $repo"
+    # Check if tool is already installed
+    local tool_lower=$(echo "$tool_name" | tr '[:upper:]' '[:lower:]')
+    if check_command "$tool_lower" || check_command "$tool_name"; then
+        log SUCCESS "$tool_name is already installed"
+        if [ "$UPDATE_MODE" = false ]; then
+            return 0
+        else
+            log INFO "Update mode: checking for updates..."
+        fi
+    fi
     
+    # Update mode: pull latest changes
     if [ "$UPDATE_MODE" = true ] && [ -d "$TOOLS_DIR/$tool_dir" ]; then
-        log INFO "Updating $tool_name..."
+        log INFO "Updating $tool_name repository..."
         cd "$TOOLS_DIR/$tool_dir" && git pull && cd "$SCRIPT_DIR" || true
     fi
     
+    # Clone repository if not exists
     if [ ! -d "$TOOLS_DIR/$tool_dir" ]; then
         log INFO "Cloning $repo..."
-        git clone "https://github.com/$repo.git" "$TOOLS_DIR/$tool_dir" || {
-            log ERROR "Failed to clone $repo"
+        if ! git clone "https://github.com/$repo.git" "$TOOLS_DIR/$tool_dir" 2>&1 | tee -a install.log; then
+            log ERROR "Failed to clone $repo (network error or repo not found)"
+            log WARNING "Skipping $tool_name installation. You can install it manually later."
             return 1
-        }
+        fi
+    else
+        log INFO "$tool_name repository already exists at $TOOLS_DIR/$tool_dir"
     fi
     
     # Check for requirements.txt
     if [ -f "$TOOLS_DIR/$tool_dir/requirements.txt" ]; then
         log INFO "Installing Python dependencies for $tool_name..."
-        pip3 install -r "$TOOLS_DIR/$tool_dir/requirements.txt" 2>&1 | tee -a install.log || {
-            log WARNING "Failed to install some dependencies for $tool_name"
-        }
+        if pip3 install -r "$TOOLS_DIR/$tool_dir/requirements.txt" 2>&1 | tee -a install.log; then
+            log SUCCESS "Dependencies installed for $tool_name"
+        else
+            log WARNING "Some dependencies may have failed for $tool_name"
+        fi
     fi
     
     # Check for setup.py
     if [ -f "$TOOLS_DIR/$tool_dir/setup.py" ]; then
         log INFO "Running setup.py for $tool_name..."
         cd "$TOOLS_DIR/$tool_dir"
-        python3 setup.py install --user 2>&1 | tee -a "$SCRIPT_DIR/install.log" || {
-            log WARNING "setup.py install failed for $tool_name"
-        }
+        if python3 setup.py install --user 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
+            log SUCCESS "setup.py completed for $tool_name"
+        else
+            log WARNING "setup.py install may have failed for $tool_name"
+        fi
         cd "$SCRIPT_DIR"
     fi
     
-    log SUCCESS "$tool_name setup completed"
+    # Final check
+    if check_command "$tool_lower" || check_command "$tool_name" || [ -f "$TOOLS_DIR/$tool_dir/${tool_name}.py" ] || [ -f "$TOOLS_DIR/$tool_dir/${tool_lower}.py" ]; then
+        log SUCCESS "$tool_name is ready"
+        return 0
+    else
+        log WARNING "$tool_name may not be properly installed. Check install.log for details."
+        return 1
+    fi
 }
 
 main() {
@@ -238,17 +284,32 @@ main() {
     
     # Smap
     log INFO "Installing Smap..."
+    if check_command "smap" || [ -f "$TOOLS_DIR/Smap/smap.py" ]; then
+        log SUCCESS "Smap is already available"
+        [ "$UPDATE_MODE" = false ] && { log INFO "Skipping Smap (already installed)"; } || { log INFO "Update mode: checking Smap..."; }
+    fi
+    
     if [ "$UPDATE_MODE" = true ] && [ -d "$TOOLS_DIR/Smap" ]; then
+        log INFO "Updating Smap..."
         cd "$TOOLS_DIR/Smap" && git pull && cd "$SCRIPT_DIR" || true
     fi
+    
     if [ ! -d "$TOOLS_DIR/Smap" ]; then
-        git clone "https://github.com/s0md3v/Smap.git" "$TOOLS_DIR/Smap" || log ERROR "Failed to clone Smap"
+        if git clone "https://github.com/s0md3v/Smap.git" "$TOOLS_DIR/Smap" 2>&1 | tee -a install.log; then
+            log SUCCESS "Smap cloned successfully"
+        else
+            log ERROR "Failed to clone Smap"
+            return 1
+        fi
     fi
+    
     if [ -f "$TOOLS_DIR/Smap/requirements.txt" ]; then
         pip3 install -r "$TOOLS_DIR/Smap/requirements.txt" 2>&1 | tee -a install.log || true
     fi
+    
     if [ -f "$TOOLS_DIR/Smap/smap.py" ]; then
         chmod +x "$TOOLS_DIR/Smap/smap.py" 2>/dev/null || true
+        log SUCCESS "Smap is ready at $TOOLS_DIR/Smap/smap.py"
     fi
     
     # 403jump
@@ -265,7 +326,13 @@ main() {
     
     # gau
     log INFO "Installing gau..."
-    install_go_tool "lc/gau" "gau" "$TOOLS_DIR/gau/gau"
+    if ! install_go_tool "lc/gau" "gau" "$TOOLS_DIR/gau/gau"; then
+        # Try alternative installation method for gau
+        if ! check_command "gau"; then
+            log WARNING "Trying alternative installation for gau..."
+            go install "github.com/lc/gau/v2/cmd/gau@latest" 2>&1 | tee -a install.log || true
+        fi
+    fi
     
     log INFO ""
     log INFO "=== Installation Summary ==="
@@ -273,37 +340,80 @@ main() {
     
     # Verify installations
     local tools=(
-        "asnmap" "subfinder" "naabu" "httpx" "cvemap"
-        "cariddi" "favicorn" "ipranges"
-        "bbot" "wafw00f" "gau"
+        "asnmap:Go" "subfinder:Go" "naabu:Go" "httpx:Go" "cvemap:Go"
+        "cariddi:Go" "favicorn:Go" "ipranges:Go"
+        "bbot:Python" "wafw00f:Python" "gau:Go"
+        "403jump:Go" "gungnir:Go"
     )
     
     local installed=0
     local missing=0
+    local in_tools=0
     
-    for tool in "${tools[@]}"; do
-        if check_command "$tool"; then
-            log SUCCESS "$tool: ✓ installed"
+    for tool_info in "${tools[@]}"; do
+        local tool_name=$(echo "$tool_info" | cut -d':' -f1)
+        local tool_type=$(echo "$tool_info" | cut -d':' -f2)
+        
+        if check_command "$tool_name"; then
+            log SUCCESS "$tool_name: ✓ installed at $(command -v $tool_name)"
             ((installed++))
         else
-            log WARNING "$tool: ✗ not found in PATH"
-            ((missing++))
+            # Check if available in tools directory
+            local found_in_tools=false
+            
+            if [ "$tool_type" = "Python" ]; then
+                # Check for Python scripts in tools/
+                if [ -f "$TOOLS_DIR/${tool_name}"*"/${tool_name}.py" ] || [ -f "$TOOLS_DIR/${tool_name}"*"/${tool_name}"*".py" ]; then
+                    log INFO "$tool_name: ✓ available in $TOOLS_DIR (Python script)"
+                    ((in_tools++))
+                    found_in_tools=true
+                fi
+            elif [ "$tool_type" = "Go" ]; then
+                # Check for Go binaries in tools/
+                if [ -f "$TOOLS_DIR/${tool_name}/${tool_name}" ]; then
+                    log INFO "$tool_name: ✓ available in $TOOLS_DIR (binary)"
+                    ((in_tools++))
+                    found_in_tools=true
+                fi
+            fi
+            
+            if [ "$found_in_tools" = false ]; then
+                log WARNING "$tool_name: ✗ not found"
+                ((missing++))
+            fi
         fi
     done
     
     echo ""
-    log INFO "Installed: $installed | Missing: $missing"
+    log INFO "Summary: $installed in PATH | $in_tools in tools/ | $missing missing"
     echo ""
     
-    if [ $missing -gt 0 ]; then
-        log WARNING "Some tools are not in PATH. You may need to:"
-        log INFO "1. Add Go bin directory to PATH: export PATH=\$PATH:\$(go env GOPATH)/bin"
-        log INFO "2. Add Python user bin to PATH: export PATH=\$PATH:~/.local/bin"
-        log INFO "3. Or use tools from $TOOLS_DIR/ directly"
+    if [ $missing -gt 0 ] || [ $in_tools -gt 0 ]; then
+        echo ""
+        log INFO "Installation notes:"
+        if [ $missing -gt 0 ]; then
+            log WARNING "Some tools could not be installed (network errors or other issues)"
+            log INFO "You can try running this script again or install them manually"
+        fi
+        if [ $in_tools -gt 0 ]; then
+            log INFO "Some tools are available in $TOOLS_DIR/ directory"
+            log INFO "recondite_v2.sh will use them automatically"
+        fi
+        echo ""
+        log INFO "To add tools to your PATH:"
+        log INFO "  1. Go tools: export PATH=\$PATH:\$(go env GOPATH)/bin"
+        log INFO "  2. Python tools: export PATH=\$PATH:~/.local/bin"
+        log INFO "  3. Add to ~/.bashrc or ~/.zshrc to make permanent"
     fi
     
-    log SUCCESS "Installation completed!"
-    log INFO "Installation log saved to: install.log"
+    echo ""
+    log SUCCESS "Installation process completed!"
+    log INFO "Installation log saved to: $(pwd)/install.log"
+    log INFO ""
+    log INFO "Next steps:"
+    log INFO "  1. Configure API keys: cp config/apikeys.example.env config/apikeys.env"
+    log INFO "  2. Edit config/apikeys.env with your API keys"
+    log INFO "  3. Run: ./recondite_v2.sh -d scope.txt --full -o reports"
 }
 
 main "$@"
