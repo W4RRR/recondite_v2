@@ -44,9 +44,11 @@
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/recondite_v2.git
+git clone <repository-url>
 cd recondite_v2
 ```
+
+Or download the repository as a ZIP file and extract it.
 
 2. Make scripts executable:
 ```bash
