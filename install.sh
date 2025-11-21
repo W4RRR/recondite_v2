@@ -283,40 +283,11 @@ main() {
     install_go_tool "edoardottt/cariddi" "cariddi" "$TOOLS_DIR/cariddi/cariddi"
     install_go_tool "sharsil/favicorn" "favicorn" "$TOOLS_DIR/favicorn/favicorn"
     
-    # ipranges - special handling (Go files are in cmd/ipranges/)
-    log INFO "Installing ipranges..."
-    if check_command "ipranges"; then
-        log SUCCESS "ipranges is already installed at: $(command -v ipranges)"
-    else
-        if [ ! -d "$TOOLS_DIR/ipranges" ]; then
-            log INFO "Cloning lord-alfred/ipranges..."
-            if git clone "https://github.com/lord-alfred/ipranges.git" "$TOOLS_DIR/ipranges" 2>&1 | tee -a install.log; then
-                log SUCCESS "ipranges cloned successfully"
-            else
-                log ERROR "Failed to clone ipranges"
-            fi
-        fi
-        
-        if [ -d "$TOOLS_DIR/ipranges" ]; then
-            log INFO "Building ipranges from source..."
-            cd "$TOOLS_DIR/ipranges"
-            # Build from cmd/ipranges directory where the Go files are located
-            if go build -o ipranges ./cmd/ipranges 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
-                # Copy to go bin or local bin
-                local go_bin=$(go env GOPATH)/bin
-                if [ -d "$go_bin" ]; then
-                    cp ipranges "$go_bin/" 2>/dev/null && log SUCCESS "ipranges installed to $go_bin/ipranges"
-                else
-                    log SUCCESS "ipranges built at $TOOLS_DIR/ipranges/ipranges"
-                fi
-            else
-                log WARNING "Failed to build ipranges from source. Trying go install..."
-                # Fallback to go install (may timeout but worth trying)
-                go install github.com/lord-alfred/ipranges/cmd/ipranges@latest 2>&1 | tee -a "$SCRIPT_DIR/install.log" || log ERROR "Both build and install methods failed for ipranges"
-            fi
-            cd "$SCRIPT_DIR"
-        fi
-    fi
+    # ipranges - NOTE: This is NOT a compiled tool, just IP lists in .txt files
+    # The tool will download these files on-demand during execution
+    log INFO "ipranges setup..."
+    log INFO "ipranges is a data repository (IP lists), not a compiled tool"
+    log SUCCESS "ipranges will be used via direct file downloads during recon"
     
     # Python tools
     log INFO ""
@@ -397,7 +368,7 @@ main() {
     # Verify installations
     local tools=(
         "asnmap:Go" "subfinder:Go" "naabu:Go" "httpx:Go" "cvemap:Go"
-        "cariddi:Go" "favicorn:Go" "ipranges:Go"
+        "cariddi:Go" "favicorn:Go"
         "bbot:Python" "wafw00f:Python" "gau:Go"
         "403jump:Go" "gungnir:Go"
     )

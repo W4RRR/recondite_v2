@@ -23,7 +23,10 @@ NC='\033[0m' # No Color
 BOLD='\033[1m'
 
 # Global variables
+DOMAINS_INPUT=""
 DOMAINS_FILE=""
+DIRECT_DOMAIN=""
+IS_DIRECT_DOMAIN=false
 ASN_FILE=""
 OUTPUT_DIR="./reports"
 CLOUD_MODE=false
@@ -171,7 +174,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             -d|--domains)
-                DOMAINS_FILE="$2"
+                DOMAINS_INPUT="$2"
                 shift 2
                 ;;
             -a|--asn)
@@ -235,24 +238,32 @@ parse_args() {
     done
     
     # Validation
-    if [ "$UPDATE_MODE" = false ] && [ -z "$DOMAINS_FILE" ]; then
-        log ERROR "Domain file (-d) is required"
+    if [ "$UPDATE_MODE" = false ] && [ -z "$DOMAINS_INPUT" ]; then
+        log ERROR "Domain or domain file (-d) is required"
         show_help
         exit 1
     fi
     
-    if [ "$UPDATE_MODE" = false ] && [ ! -f "$DOMAINS_FILE" ]; then
-        log ERROR "Domain file not found: $DOMAINS_FILE"
-        exit 1
+    # Check if input is a file or a direct domain
+    if [ "$UPDATE_MODE" = false ]; then
+        if [ -f "$DOMAINS_INPUT" ]; then
+            # It's a file
+            DOMAINS_FILE="$DOMAINS_INPUT"
+            IS_DIRECT_DOMAIN=false
+        else
+            # Assume it's a direct domain name
+            DIRECT_DOMAIN="$DOMAINS_INPUT"
+            IS_DIRECT_DOMAIN=true
+        fi
     fi
 }
 
 show_help() {
     cat << EOF
-Usage: $SCRIPT_NAME -d <domains_file> [OPTIONS]
+Usage: $SCRIPT_NAME -d <domain|file> [OPTIONS]
 
 Required:
-    -d, --domains FILE      File with list of root domains (one per line)
+    -d, --domains DOMAIN|FILE   Single domain (e.g., example.com) or file with domains (one per line)
 
 Options:
     -a, --asn FILE          File with list of ASNs (e.g. AS1234)
@@ -270,9 +281,19 @@ Options:
     -h, --help              Show this help message
 
 Examples:
+    # Single domain
+    $SCRIPT_NAME -d example.com --full -v -o reports/example
+    
+    # Domain file
     $SCRIPT_NAME -d scope.txt --full -o reports
+    
+    # With all options
+    $SCRIPT_NAME -d hunty.es --full --threads-httpx 5 --threads-naabu 5 -ua -v --cloud --delay-random 0.3-0.9 -o /path/to/output
+    
+    # Passive mode from file
     $SCRIPT_NAME -d scope.txt --passive -o reports_passive
-    $SCRIPT_NAME -d scope.txt --cloud --full -o reports
+    
+    # Update tools
     $SCRIPT_NAME -up
 
 EOF
@@ -337,18 +358,37 @@ run_ipranges() {
     
     mkdir -p "$recon_dir"
     
-    log INFO "Running ipranges for cloud provider detection"
+    log INFO "Downloading cloud provider IP ranges (ipranges data)"
     
-    if check_tool "ipranges"; then
-        if [ "$VERBOSE" = true ]; then
-            ipranges all > "$recon_dir/all_providers.txt" 2>&1
-        else
-            ipranges all > "$recon_dir/all_providers.txt" 2>/dev/null
-        fi
+    # ipranges is not a tool, it's a data repository - download the "all" lists
+    local base_url="https://raw.githubusercontent.com/lord-alfred/ipranges/main/all"
+    
+    if command -v curl &> /dev/null; then
+        curl -sSL "$base_url/ipv4_merged.txt" -o "$recon_dir/ipv4_all_providers.txt" 2>/dev/null || true
+        curl -sSL "$base_url/ipv6_merged.txt" -o "$recon_dir/ipv6_all_providers.txt" 2>/dev/null || true
         
-        log SUCCESS "Cloud provider ranges saved"
+        # Combine both for convenience
+        cat "$recon_dir/ipv4_all_providers.txt" "$recon_dir/ipv6_all_providers.txt" 2>/dev/null > "$recon_dir/all_providers.txt" || true
+        
+        if [ -s "$recon_dir/all_providers.txt" ]; then
+            log SUCCESS "Cloud provider IP ranges downloaded ($(wc -l < "$recon_dir/all_providers.txt") ranges)"
+        else
+            log WARNING "Failed to download ipranges data"
+        fi
+    elif command -v wget &> /dev/null; then
+        wget -q "$base_url/ipv4_merged.txt" -O "$recon_dir/ipv4_all_providers.txt" 2>/dev/null || true
+        wget -q "$base_url/ipv6_merged.txt" -O "$recon_dir/ipv6_all_providers.txt" 2>/dev/null || true
+        
+        # Combine both for convenience
+        cat "$recon_dir/ipv4_all_providers.txt" "$recon_dir/ipv6_all_providers.txt" 2>/dev/null > "$recon_dir/all_providers.txt" || true
+        
+        if [ -s "$recon_dir/all_providers.txt" ]; then
+            log SUCCESS "Cloud provider IP ranges downloaded ($(wc -l < "$recon_dir/all_providers.txt") ranges)"
+        else
+            log WARNING "Failed to download ipranges data"
+        fi
     else
-        log WARNING "ipranges not found. Skipping cloud detection"
+        log WARNING "curl or wget not found. Skipping ipranges download"
     fi
     
     apply_delay
@@ -1677,13 +1717,25 @@ main() {
     fi
     
     # Process each target
-    while IFS= read -r target; do
-        [ -z "$target" ] && continue
-        target=$(echo "$target" | tr -d '\r\n' | sed 's|^https\?://||' | sed 's|/.*||')
-        [ -z "$target" ] && continue
-        
-        run_for_target "$target"
-    done < "$DOMAINS_FILE"
+    if [ "$IS_DIRECT_DOMAIN" = true ]; then
+        # Single domain provided directly
+        local target=$(echo "$DIRECT_DOMAIN" | tr -d '\r\n' | sed 's|^https\?://||' | sed 's|/.*||')
+        if [ -n "$target" ]; then
+            run_for_target "$target"
+        else
+            log ERROR "Invalid domain provided: $DIRECT_DOMAIN"
+            exit 1
+        fi
+    else
+        # File with domains
+        while IFS= read -r target; do
+            [ -z "$target" ] && continue
+            target=$(echo "$target" | tr -d '\r\n' | sed 's|^https\?://||' | sed 's|/.*||')
+            [ -z "$target" ] && continue
+            
+            run_for_target "$target"
+        done < "$DOMAINS_FILE"
+    fi
     
     print_global_summary
 }
