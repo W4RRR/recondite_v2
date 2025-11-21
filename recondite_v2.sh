@@ -27,16 +27,113 @@ OUTPUT_DIR=""
 PASSIVE_MODE=false
 UPDATE_TOOLS=false
 VERBOSE=false
+RANDOM_UA=false
+CUSTOM_DELAY=""
 CONFIG_FILE="config/api_keys.conf"
 TOOLS_DIR="tools"
 DELAY_MIN=0.3
 DELAY_MAX=0.9
 USER_AGENTS=(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.88 Safari/537.36 OPR/104.0.0.0"
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (Linux; Android 14; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/121.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_7_10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:115.0) Gecko/20100101 Firefox/115.0"
+    "Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko"
+    "Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 12; ONEPLUS A6013) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    "Mozilla/5.0 (Linux; Android 13; Pixel 6a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko; compatible; Googlebot/2.1; +http://www.google.com/bot.html) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)"
+    "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)"
+    "Mozilla/5.0 (compatible; DuckDuckBot/1.1; +http://duckduckgo.com/duckduckbot.html)"
+    "Mozilla/5.0 (Linux; Android 13; CPH2135) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6_8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (X11; Manjaro; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+    "Mozilla/5.0 (Linux; Android 12; moto g(60)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:118.0) Gecko/20100101 Firefox/118.0"
+    "Mozilla/5.0 (Linux; Android 12; SM-A528B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Brave Chrome/121.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 13; VOG-L29) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.7 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_7_1) AppleWebKit/537.36 (KHTML, like Gecko) Vivaldi/6.5.3206.63 Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 12; SM-G781B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 13; M2101K6G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0"
+    "Mozilla/5.0 (Linux; Android 11; SM-A505FN) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.96 Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_6_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chromium/118.0.5993.88 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64; rv:117.0) Gecko/20100101 Firefox/117.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:111.0) Gecko/20100101 Firefox/111.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Brave/1.61.120 Chrome/118.0.5993.88 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Vivaldi/6.1.3035.84 Chrome/114.0.5735.134 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Opera/104.0.0.0 Chrome/119.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 12; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.134 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 11; Mi 11 Lite) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 10; HMA-L29) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 9; ONEPLUS A5000) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 13; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 12; CPH2219) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.60 Mobile Safari/537.36"
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 15_7_9 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.7.9 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_8_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.8.1 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (iPad; CPU OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (iPod touch; CPU iPhone OS 13_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.2 Safari/605.1.15"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36"
+    "Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)"
+    "Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)"
+    "Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot.html)"
+    "Mozilla/5.0 (compatible; Sogou web spider/4.0; +http://www.sogou.com/docs/help/webmasters.htm#07)"
+    "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+    "Twitterbot/1.0"
+    "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)"
+    "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"
+    "curl/8.5.0"
+    "Wget/1.21.3 (linux-gnu)"
+    "python-requests/2.31.0"
+    "Go-http-client/2.0"
+    "okhttp/4.12.0"
+    "PostmanRuntime/7.36.3"
+    "Java/1.8.0_361"
+    "libwww-perl/6.66"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) WhatsApp/2.2407.1 Chrome/108.0.5359.215 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) TelegramDesktop/5.4 Chrome/120.0.6099.224 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64; rv:2.0) Gecko/20100101 SeaMonkey/2.53.18"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:31.0) Gecko/20100101 PaleMoon/31.4.2"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Spotify/1.2.25.1006 Chrome/114.0.5735.199 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Electron/28.1.0 Chrome/120.0.6099.109 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Thunderbird/90.0"
+    "Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Trident/6.0)"
 )
 
 # Statistics
@@ -120,13 +217,23 @@ log() {
 }
 
 get_random_user_agent() {
-    local size=${#USER_AGENTS[@]}
-    local index=$((RANDOM % size))
-    echo "${USER_AGENTS[$index]}"
+    if [ "$RANDOM_UA" = true ]; then
+        local size=${#USER_AGENTS[@]}
+        local index=$((RANDOM % size))
+        echo "${USER_AGENTS[$index]}"
+    else
+        # Default user agent if random is not enabled
+        echo "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    fi
 }
 
 random_delay() {
-    local delay=$(awk "BEGIN {printf \"%.2f\", $DELAY_MIN + ($DELAY_MAX - $DELAY_MIN) * rand()}")
+    local delay
+    if [ -n "$CUSTOM_DELAY" ]; then
+        delay="$CUSTOM_DELAY"
+    else
+        delay=$(awk "BEGIN {printf \"%.2f\", $DELAY_MIN + ($DELAY_MAX - $DELAY_MIN) * rand()}")
+    fi
     if [ "$VERBOSE" = true ]; then
         log DEBUG "Delaying ${delay}s before next operation"
     fi
@@ -215,7 +322,10 @@ check_tool() {
             fi
             ;;
         "Corsy")
-            if [ -f "${TOOLS_DIR}/Corsy-master/corsy.py" ]; then
+            if [ -f "${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py" ]; then
+                eval "$path_var=${TOOLS_DIR}/Corsy-master/Corsy-master/corsy.py"
+                return 0
+            elif [ -f "${TOOLS_DIR}/Corsy-master/corsy.py" ]; then
                 eval "$path_var=${TOOLS_DIR}/Corsy-master/corsy.py"
                 return 0
             fi
@@ -270,6 +380,10 @@ load_config() {
 # API Keys Configuration for Recondite v2
 # Add your API keys below (one per line, format: KEY_NAME=value)
 
+# ProjectDiscovery Cloud Platform API (for asnmap, cvemap, etc.)
+# Get your API key at: https://cloud.projectdiscovery.io/?ref=api_key
+PDCP_API_KEY=
+
 # Shodan API (for Smap)
 SHODAN_API_KEY=
 
@@ -296,11 +410,15 @@ EOF
         log INFO "Template config file created. Please edit $CONFIG_FILE with your API keys."
     fi
     
-    # Source the config file
+    # Source the config file (fix Windows line endings)
     if [ -f "$CONFIG_FILE" ]; then
+        # Remove Windows line endings (\r) before sourcing
+        local temp_config=$(mktemp)
+        sed 's/\r$//' "$CONFIG_FILE" > "$temp_config"
         set -a
-        source "$CONFIG_FILE"
+        source "$temp_config"
         set +a
+        rm -f "$temp_config"
     fi
 }
 
@@ -339,8 +457,13 @@ phase0_asn_discovery() {
     
     if [ -n "$asnmap_cmd" ]; then
         log INFO "Running asnmap..."
+        # Set PDCP API key if available
+        if [ -n "${PDCP_API_KEY:-}" ]; then
+            export PDCP_API_KEY
+            [ "$VERBOSE" = true ] && log DEBUG "Using PDCP API key for asnmap"
+        fi
         if [ "$VERBOSE" = true ]; then
-            "$asnmap_cmd" -d "$domain" -o "${OUTPUT_DIR}/asn_results.txt" || true
+            "$asnmap_cmd" -d "$domain" -o "${OUTPUT_DIR}/asn_results.txt" -v || true
         else
             "$asnmap_cmd" -d "$domain" -o "${OUTPUT_DIR}/asn_results.txt" 2>/dev/null || true
         fi
@@ -406,10 +529,16 @@ phase1_subdomain_discovery() {
     # BBOT - Deep enumeration (if not in passive mode)
     if [ "$PASSIVE_MODE" = false ] && check_tool "bbot" "bbot_cmd"; then
         log INFO "Running bbot (deep enumeration)..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using bbot: $bbot_cmd"
         random_delay
-        $bbot_cmd -t "$domain" -f subdomain-enum --flags passive -o "${OUTPUT_DIR}/bbot_results" 2>/dev/null || true
+        if [ "$VERBOSE" = true ]; then
+            $bbot_cmd -t "$domain" -p subdomain-enum -rf passive -o "${OUTPUT_DIR}/bbot_results" -v || true
+        else
+            $bbot_cmd -t "$domain" -p subdomain-enum -rf passive -o "${OUTPUT_DIR}/bbot_results" 2>/dev/null || true
+        fi
         if [ -d "${OUTPUT_DIR}/bbot_results" ]; then
             find "${OUTPUT_DIR}/bbot_results" -name "*.txt" -exec cat {} \; >> "${OUTPUT_DIR}/bbot_subdomains.txt" 2>/dev/null || true
+            [ "$VERBOSE" = true ] && log DEBUG "BBOT results saved to bbot_results directory"
         fi
     fi
     
@@ -466,9 +595,10 @@ phase2_port_scanning() {
     if [ "$PASSIVE_MODE" = false ] && check_tool "naabu" "naabu_cmd"; then
         log INFO "Running active port scan with Naabu..."
         [ "$VERBOSE" = true ] && log DEBUG "Using naabu: $naabu_cmd"
+        [ "$VERBOSE" = true ] && log DEBUG "Scanning $(wc -l < "${OUTPUT_DIR}/all_subdomains.txt" 2>/dev/null || echo "0") subdomains"
         random_delay
         if [ "$VERBOSE" = true ]; then
-            "$naabu_cmd" -l "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/naabu_results.txt" -rate 1000 || true
+            "$naabu_cmd" -l "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/naabu_results.txt" -rate 1000 -v || true
         else
             "$naabu_cmd" -l "${OUTPUT_DIR}/all_subdomains.txt" -o "${OUTPUT_DIR}/naabu_results.txt" -rate 1000 2>/dev/null || true
         fi
@@ -532,14 +662,14 @@ phase3_http_probing() {
             -title -tech-detect -status-code -content-length -server \
             -H "User-Agent: $user_agent" \
             -o "${OUTPUT_DIR}/httpx_results.txt" \
-            -json -oJ "${OUTPUT_DIR}/httpx_results.json" \
-            -rate-limit 50 || true
+            -json-output "${OUTPUT_DIR}/httpx_results.json" \
+            -rate-limit 50 -v || true
     else
         "$httpx_cmd" -l "$input_file" \
             -title -tech-detect -status-code -content-length -server \
             -H "User-Agent: $user_agent" \
             -o "${OUTPUT_DIR}/httpx_results.txt" \
-            -json -oJ "${OUTPUT_DIR}/httpx_results.json" \
+            -json-output "${OUTPUT_DIR}/httpx_results.json" \
             -rate-limit 50 2>/dev/null || true
     fi
     
@@ -587,8 +717,18 @@ phase3_http_probing() {
     # Favicon fingerprinting
     if check_tool "favicorn" "favicorn_cmd"; then
         log INFO "Running favicon fingerprinting..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using favicorn: $favicorn_cmd"
+        [ "$VERBOSE" = true ] && log DEBUG "Processing $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs"
         random_delay
-        "$favicorn_cmd" -l "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/favicorn_results.txt" 2>/dev/null || true
+        if [ "$VERBOSE" = true ]; then
+            "$favicorn_cmd" -l "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/favicorn_results.txt" || true
+        else
+            "$favicorn_cmd" -l "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/favicorn_results.txt" 2>/dev/null || true
+        fi
+        if [ -f "${OUTPUT_DIR}/favicorn_results.txt" ] && [ -s "${OUTPUT_DIR}/favicorn_results.txt" ]; then
+            local favicorn_count=$(wc -l < "${OUTPUT_DIR}/favicorn_results.txt" 2>/dev/null || echo "0")
+            log SUCCESS "Favicon fingerprinting completed ($favicorn_count results)"
+        fi
     fi
     
     # Filter 403 responses for later bypass attempts
@@ -619,21 +759,22 @@ phase4_deep_crawling() {
         log INFO "Fetching historical URLs with GAU..."
         [ "$VERBOSE" = true ] && log DEBUG "Processing $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs with GAU"
         random_delay
-        local gau_count=0
-        while IFS= read -r url; do
-            random_delay
-            gau_count=$((gau_count + 1))
-            [ "$VERBOSE" = true ] && [ $((gau_count % 5)) -eq 0 ] && log DEBUG "GAU progress: $gau_count URLs processed"
-            if [ "$VERBOSE" = true ]; then
+        # Use the correct gau syntax: echo url | gau | grep pattern
+        if [ "$VERBOSE" = true ]; then
+            while IFS= read -r url; do
+                random_delay
                 echo "$url" | "$gau_cmd" | \
                     grep -E "\.(xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar\.gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|gz|config|csv|yaml|md|md5|tar|xz|7zip|p12|pem|key|crt|csr|sh|pl|py|java|class|jar|war|ear|sqlitedb|sqlite3|dbf|db3|accdb|mdb|sqlcipher|gitignore|env|ini|conf|properties|plist|cfg)$" \
                     >> "${OUTPUT_DIR}/gau_sensitive_files.txt" || true
-            else
+            done < "${OUTPUT_DIR}/http_urls.txt"
+        else
+            while IFS= read -r url; do
+                random_delay
                 echo "$url" | "$gau_cmd" 2>/dev/null | \
                     grep -E "\.(xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar\.gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|gz|config|csv|yaml|md|md5|tar|xz|7zip|p12|pem|key|crt|csr|sh|pl|py|java|class|jar|war|ear|sqlitedb|sqlite3|dbf|db3|accdb|mdb|sqlcipher|gitignore|env|ini|conf|properties|plist|cfg)$" \
                     >> "${OUTPUT_DIR}/gau_sensitive_files.txt" 2>/dev/null || true
-            fi
-        done < "${OUTPUT_DIR}/http_urls.txt"
+            done < "${OUTPUT_DIR}/http_urls.txt"
+        fi
         
         if [ -f "${OUTPUT_DIR}/gau_sensitive_files.txt" ] && [ -s "${OUTPUT_DIR}/gau_sensitive_files.txt" ]; then
             sort -u "${OUTPUT_DIR}/gau_sensitive_files.txt" -o "${OUTPUT_DIR}/gau_sensitive_files.txt"
@@ -646,11 +787,18 @@ phase4_deep_crawling() {
     # Cariddi - Parameter and endpoint discovery
     if check_tool "cariddi" "cariddi_cmd"; then
         log INFO "Running Cariddi for parameter and endpoint discovery..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using cariddi: $cariddi_cmd"
+        [ "$VERBOSE" = true ] && log DEBUG "Processing $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs"
         random_delay
-        "$cariddi_cmd" -l "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cariddi_results.txt" 2>/dev/null || true
+        if [ "$VERBOSE" = true ]; then
+            "$cariddi_cmd" -l "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cariddi_results.txt" || true
+        else
+            "$cariddi_cmd" -l "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cariddi_results.txt" 2>/dev/null || true
+        fi
         if [ -f "${OUTPUT_DIR}/cariddi_results.txt" ] && [ -s "${OUTPUT_DIR}/cariddi_results.txt" ]; then
-            STATS_ENDPOINTS=$(grep -c "endpoint" "${OUTPUT_DIR}/cariddi_results.txt" 2>/dev/null || echo "0")
-            log SUCCESS "Endpoint discovery completed"
+            STATS_ENDPOINTS=$(grep -c "endpoint\|parameter" "${OUTPUT_DIR}/cariddi_results.txt" 2>/dev/null || echo "0")
+            log SUCCESS "Endpoint discovery completed ($STATS_ENDPOINTS endpoints/parameters found)"
+            [ "$VERBOSE" = true ] && log DEBUG "Sample results: $(head -3 "${OUTPUT_DIR}/cariddi_results.txt" 2>/dev/null | tr '\n' '; ')"
         fi
     fi
     
@@ -672,19 +820,33 @@ phase4_deep_crawling() {
     # CSP Stalker - Content Security Policy analysis
     if check_tool "CSP-Stalker" "csp_stalker_cmd"; then
         log INFO "Analyzing CSP headers..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using CSP-Stalker: $csp_stalker_cmd"
         random_delay
+        local csp_count=0
         if [[ "$csp_stalker_cmd" == *.py ]]; then
             while IFS= read -r url; do
                 random_delay
-                python3 "$csp_stalker_cmd" -u "$url" -o "${OUTPUT_DIR}/csp_results" 2>/dev/null || true
+                csp_count=$((csp_count + 1))
+                [ "$VERBOSE" = true ] && [ $((csp_count % 5)) -eq 0 ] && log DEBUG "CSP analysis progress: $csp_count URLs processed"
+                if [ "$VERBOSE" = true ]; then
+                    python3 "$csp_stalker_cmd" -u "$url" -o "${OUTPUT_DIR}/csp_results" || true
+                else
+                    python3 "$csp_stalker_cmd" -u "$url" -o "${OUTPUT_DIR}/csp_results" 2>/dev/null || true
+                fi
             done < <(head -20 "${OUTPUT_DIR}/http_urls.txt")
         else
             while IFS= read -r url; do
                 random_delay
-                "$csp_stalker_cmd" -u "$url" -o "${OUTPUT_DIR}/csp_results" 2>/dev/null || true
+                csp_count=$((csp_count + 1))
+                [ "$VERBOSE" = true ] && [ $((csp_count % 5)) -eq 0 ] && log DEBUG "CSP analysis progress: $csp_count URLs processed"
+                if [ "$VERBOSE" = true ]; then
+                    "$csp_stalker_cmd" -u "$url" -o "${OUTPUT_DIR}/csp_results" || true
+                else
+                    "$csp_stalker_cmd" -u "$url" -o "${OUTPUT_DIR}/csp_results" 2>/dev/null || true
+                fi
             done < <(head -20 "${OUTPUT_DIR}/http_urls.txt")
         fi
-        log SUCCESS "CSP analysis completed"
+        log SUCCESS "CSP analysis completed ($csp_count URLs analyzed)"
     fi
 }
 
@@ -736,39 +898,82 @@ phase5_vulnerability_scanning() {
     # Login panel detection
     if check_tool "logsensor" "logsensor_cmd"; then
         log INFO "Scanning for login panels..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using logsensor: $logsensor_cmd"
+        [ "$VERBOSE" = true ] && log DEBUG "Scanning $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs for login panels"
         random_delay
         if [[ "$logsensor_cmd" == *.py ]]; then
-            python3 "$logsensor_cmd" -f "${OUTPUT_DIR}/http_urls.txt" --login 2>/dev/null | tee "${OUTPUT_DIR}/login_panels.txt" || true
+            if [ "$VERBOSE" = true ]; then
+                python3 "$logsensor_cmd" -f "${OUTPUT_DIR}/http_urls.txt" --login 2>&1 | tee "${OUTPUT_DIR}/login_panels.txt" || true
+            else
+                python3 "$logsensor_cmd" -f "${OUTPUT_DIR}/http_urls.txt" --login 2>/dev/null | tee "${OUTPUT_DIR}/login_panels.txt" || true
+            fi
         else
-            "$logsensor_cmd" -f "${OUTPUT_DIR}/http_urls.txt" --login 2>/dev/null | tee "${OUTPUT_DIR}/login_panels.txt" || true
+            if [ "$VERBOSE" = true ]; then
+                "$logsensor_cmd" -f "${OUTPUT_DIR}/http_urls.txt" --login 2>&1 | tee "${OUTPUT_DIR}/login_panels.txt" || true
+            else
+                "$logsensor_cmd" -f "${OUTPUT_DIR}/http_urls.txt" --login 2>/dev/null | tee "${OUTPUT_DIR}/login_panels.txt" || true
+            fi
         fi
         if [ -f "${OUTPUT_DIR}/login_panels.txt" ] && [ -s "${OUTPUT_DIR}/login_panels.txt" ]; then
-            STATS_LOGIN_PANELS=$(grep -c "http" "${OUTPUT_DIR}/login_panels.txt" 2>/dev/null || echo "0")
-            log SUCCESS "Found $STATS_LOGIN_PANELS login panels"
+            # Extract only URLs from logsensor output (filter out ASCII art and messages)
+            grep -E "^https?://" "${OUTPUT_DIR}/login_panels.txt" > "${OUTPUT_DIR}/login_panels_clean.txt" 2>/dev/null || true
+            STATS_LOGIN_PANELS=$(wc -l < "${OUTPUT_DIR}/login_panels_clean.txt" 2>/dev/null || echo "0")
+            if [ "$STATS_LOGIN_PANELS" -gt 0 ]; then
+                mv "${OUTPUT_DIR}/login_panels_clean.txt" "${OUTPUT_DIR}/login_panels.txt"
+                log SUCCESS "Found $STATS_LOGIN_PANELS login panels"
+                [ "$VERBOSE" = true ] && log DEBUG "Login panels: $(head -3 "${OUTPUT_DIR}/login_panels.txt" 2>/dev/null | tr '\n' '; ')"
+            else
+                STATS_LOGIN_PANELS=0
+                log INFO "No login panels detected"
+            fi
+        else
+            STATS_LOGIN_PANELS=0
         fi
     fi
     
     # CORS vulnerability scanning
     if check_tool "Corsy" "corsy_cmd"; then
         log INFO "Scanning for CORS misconfigurations..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using Corsy: $corsy_cmd"
+        [ "$VERBOSE" = true ] && log DEBUG "Scanning $(wc -l < "${OUTPUT_DIR}/http_urls.txt" 2>/dev/null || echo "0") URLs for CORS"
         random_delay
         if [[ "$corsy_cmd" == *.py ]]; then
-            python3 "$corsy_cmd" -i "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cors_results.txt" 2>/dev/null || true
+            if [ "$VERBOSE" = true ]; then
+                python3 "$corsy_cmd" -i "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cors_results.txt" || true
+            else
+                python3 "$corsy_cmd" -i "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cors_results.txt" 2>/dev/null || true
+            fi
         else
-            "$corsy_cmd" -i "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cors_results.txt" 2>/dev/null || true
+            if [ "$VERBOSE" = true ]; then
+                "$corsy_cmd" -i "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cors_results.txt" || true
+            else
+                "$corsy_cmd" -i "${OUTPUT_DIR}/http_urls.txt" -o "${OUTPUT_DIR}/cors_results.txt" 2>/dev/null || true
+            fi
         fi
         if [ -f "${OUTPUT_DIR}/cors_results.txt" ] && [ -s "${OUTPUT_DIR}/cors_results.txt" ]; then
             STATS_CORS_VULN=$(grep -ic "vulnerable\|misconfigured\|CORS" "${OUTPUT_DIR}/cors_results.txt" 2>/dev/null || echo "0")
-            log SUCCESS "CORS scanning completed"
+            log SUCCESS "CORS scanning completed ($STATS_CORS_VULN vulnerabilities found)"
+            [ "$VERBOSE" = true ] && log DEBUG "CORS vulnerabilities: $(head -3 "${OUTPUT_DIR}/cors_results.txt" 2>/dev/null | tr '\n' '; ')"
         fi
     fi
     
     # CVE mapping (if cvemap is available)
     if check_tool "cvemap" "cvemap_cmd"; then
         log INFO "Checking for known CVEs..."
+        [ "$VERBOSE" = true ] && log DEBUG "Using cvemap: $cvemap_cmd"
+        # Set PDCP API key if available
+        if [ -n "${PDCP_API_KEY:-}" ]; then
+            export PDCP_API_KEY
+            [ "$VERBOSE" = true ] && log DEBUG "Using PDCP API key for cvemap"
+        fi
         random_delay
-        # This would require server version detection first, simplified here
-        log INFO "CVE mapping requires server version information"
+        # CVE mapping requires server version information from httpx results
+        if [ -f "${OUTPUT_DIR}/httpx_results.json" ] && [ -s "${OUTPUT_DIR}/httpx_results.json" ]; then
+            log INFO "CVE mapping requires server version information from httpx results"
+            [ "$VERBOSE" = true ] && log DEBUG "httpx_results.json available for CVE mapping"
+        else
+            log INFO "CVE mapping requires server version information (httpx results not available)"
+        fi
     fi
     
     # Cloud bucket enumeration (Caduceus)
@@ -1103,16 +1308,21 @@ EOF
 EOF
     fi
     
-    # Replace placeholders
+    # Replace placeholders (clean variables to avoid sed errors)
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    sed -i "s|DOMAIN_PLACEHOLDER|$domain|g" "$html_file"
-    sed -i "s|TIMESTAMP_PLACEHOLDER|$timestamp|g" "$html_file"
-    sed -i "s|SUBDOMAINS_PLACEHOLDER|$STATS_SUBDOMAINS|g" "$html_file"
-    sed -i "s|ALIVE_PLACEHOLDER|$STATS_ALIVE|g" "$html_file"
-    sed -i "s|HTTP_PLACEHOLDER|$STATS_HTTP|g" "$html_file"
-    sed -i "s|WAF_PLACEHOLDER|$STATS_WAF|g" "$html_file"
-    sed -i "s|LOGIN_PLACEHOLDER|$STATS_LOGIN_PANELS|g" "$html_file"
-    sed -i "s|CORS_PLACEHOLDER|$STATS_CORS_VULN|g" "$html_file"
+    local clean_login_panels=$(echo "$STATS_LOGIN_PANELS" | tr -d '\n\r ' | head -1)
+    # Use a temporary file for sed replacements to avoid issues with special characters
+    local temp_html=$(mktemp)
+    cp "$html_file" "$temp_html"
+    sed "s|DOMAIN_PLACEHOLDER|$domain|g" "$temp_html" | \
+        sed "s|TIMESTAMP_PLACEHOLDER|$timestamp|g" | \
+        sed "s|SUBDOMAINS_PLACEHOLDER|$STATS_SUBDOMAINS|g" | \
+        sed "s|ALIVE_PLACEHOLDER|$STATS_ALIVE|g" | \
+        sed "s|HTTP_PLACEHOLDER|$STATS_HTTP|g" | \
+        sed "s|WAF_PLACEHOLDER|$STATS_WAF|g" | \
+        sed "s|LOGIN_PLACEHOLDER|${clean_login_panels:-0}|g" | \
+        sed "s|CORS_PLACEHOLDER|$STATS_CORS_VULN|g" > "$html_file"
+    rm -f "$temp_html"
     
     cat >> "$html_file" << 'EOF'
         </div>
@@ -1289,7 +1499,8 @@ generate_summary() {
     echo -e "  • Secrets in JavaScript:     ${RED}$STATS_SECRETS${NC}"
     echo ""
     
-    if [ "$STATS_LOGIN_PANELS" -gt 0 ]; then
+    local clean_login_panels=$(echo "$STATS_LOGIN_PANELS" | tr -d '\n\r ' | head -1)
+    if [ -n "$clean_login_panels" ] && [ "$clean_login_panels" -gt 0 ] 2>/dev/null; then
         echo -e "${BOLD}${YELLOW}⚠️  LOGIN PANELS DETECTED:${NC}"
         if [ -f "${OUTPUT_DIR}/login_panels.txt" ]; then
             head -5 "${OUTPUT_DIR}/login_panels.txt" | while read -r panel; do
@@ -1433,13 +1644,16 @@ Options:
     -o, --output DIR      Output directory for results (required)
     -p, --passive         Enable passive mode (no active scanning)
     -v, --verbose         Enable verbose mode (show detailed output)
+    -ua, --random-ua      Enable random user agent rotation
+    -d, --delay SECONDS   Set custom delay between requests (overrides random delay)
     -up, --update         Show tool update information
     -h, --help            Show this help message
 
 Examples:
     $SCRIPT_NAME -t example.com -o ./results
     $SCRIPT_NAME -t https://example.com -o ./recon_results --passive
-    $SCRIPT_NAME -t example.com -o ./results --verbose
+    $SCRIPT_NAME -t example.com -o ./results --verbose --random-ua
+    $SCRIPT_NAME -t example.com -o ./results --delay 0.5
 
 EOF
                 exit 0
