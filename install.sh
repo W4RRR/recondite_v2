@@ -198,6 +198,14 @@ install_python_tool() {
         cd "$SCRIPT_DIR"
     fi
     
+    # Special handling for tools without requirements.txt or setup.py
+    # These may be standalone Python scripts or have other installation methods
+    if [ ! -f "$TOOLS_DIR/$tool_dir/requirements.txt" ] && [ ! -f "$TOOLS_DIR/$tool_dir/setup.py" ]; then
+        log INFO "$tool_name doesn't have requirements.txt or setup.py - may be a standalone script"
+        # Make main Python file executable if found
+        find "$TOOLS_DIR/$tool_dir" -maxdepth 2 -name "*.py" -type f -exec chmod +x {} \; 2>/dev/null || true
+    fi
+    
     # Final check
     if check_command "$tool_lower" || check_command "$tool_name" || [ -f "$TOOLS_DIR/$tool_dir/${tool_name}.py" ] || [ -f "$TOOLS_DIR/$tool_dir/${tool_lower}.py" ]; then
         log SUCCESS "$tool_name is ready"
@@ -275,7 +283,7 @@ main() {
     install_go_tool "edoardottt/cariddi" "cariddi" "$TOOLS_DIR/cariddi/cariddi"
     install_go_tool "sharsil/favicorn" "favicorn" "$TOOLS_DIR/favicorn/favicorn"
     
-    # ipranges - special handling due to network issues
+    # ipranges - special handling (Go files are in cmd/ipranges/)
     log INFO "Installing ipranges..."
     if check_command "ipranges"; then
         log SUCCESS "ipranges is already installed at: $(command -v ipranges)"
@@ -292,7 +300,8 @@ main() {
         if [ -d "$TOOLS_DIR/ipranges" ]; then
             log INFO "Building ipranges from source..."
             cd "$TOOLS_DIR/ipranges"
-            if go build -o ipranges . 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
+            # Build from cmd/ipranges directory where the Go files are located
+            if go build -o ipranges ./cmd/ipranges 2>&1 | tee -a "$SCRIPT_DIR/install.log"; then
                 # Copy to go bin or local bin
                 local go_bin=$(go env GOPATH)/bin
                 if [ -d "$go_bin" ]; then
@@ -301,7 +310,9 @@ main() {
                     log SUCCESS "ipranges built at $TOOLS_DIR/ipranges/ipranges"
                 fi
             else
-                log WARNING "Failed to build ipranges from source"
+                log WARNING "Failed to build ipranges from source. Trying go install..."
+                # Fallback to go install (may timeout but worth trying)
+                go install github.com/lord-alfred/ipranges/cmd/ipranges@latest 2>&1 | tee -a "$SCRIPT_DIR/install.log" || log ERROR "Both build and install methods failed for ipranges"
             fi
             cd "$SCRIPT_DIR"
         fi
@@ -325,7 +336,12 @@ main() {
     log INFO "Installing Smap..."
     if check_command "smap" || [ -f "$TOOLS_DIR/Smap/smap.py" ]; then
         log SUCCESS "Smap is already available"
-        [ "$UPDATE_MODE" = false ] && { log INFO "Skipping Smap (already installed)"; } || { log INFO "Update mode: checking Smap..."; }
+        if [ "$UPDATE_MODE" = false ]; then
+            # Already installed and not updating, skip
+            return 0
+        else
+            log INFO "Update mode: checking Smap..."
+        fi
     fi
     
     if [ "$UPDATE_MODE" = true ] && [ -d "$TOOLS_DIR/Smap" ]; then
