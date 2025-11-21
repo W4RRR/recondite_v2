@@ -44,7 +44,7 @@
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/W4RRR/recondite_v2
 cd recondite_v2
 ```
 
@@ -499,4 +499,5 @@ For issues, questions, or suggestions, please open an issue on GitHub.
 ---
 
 **Remember**: Always use this tool responsibly and only on systems you own or have explicit permission to test.
+
 
