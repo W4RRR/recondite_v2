@@ -1,0 +1,8 @@
+# Example ASN file for Recondite v2
+# One ASN per line (format: AS1234 or AS12345)
+# Lines starting with # are ignored
+
+AS15169
+AS32934
+AS16509
+

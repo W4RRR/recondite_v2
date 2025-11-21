@@ -1,0 +1,8 @@
+# Example scope file for Recondite v2
+# One domain per line (without http:// or https://)
+# Lines starting with # are ignored
+
+example.com
+subdomain.example.com
+another-target.com
+
