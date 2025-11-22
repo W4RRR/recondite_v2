@@ -708,14 +708,17 @@ run_wafw00f() {
         return 0
     fi
     
-    # Extract unique hosts
+    # Extract unique hosts (without port)
     if command -v jq &> /dev/null; then
-        jq -r '.url' "$httpx_json" | sed 's|https\?://||' | sed 's|/.*||' | sort -u > "$recon_dir/hosts_http.txt"
+        jq -r '.url' "$httpx_json" | sed 's|https\?://||' | sed 's|:.*||' | sed 's|/.*||' | sort -u > "$recon_dir/hosts_http.txt"
+        
+        # Add protocol back for wafw00f
+        sed 's|^|https://|' "$recon_dir/hosts_http.txt" > "$recon_dir/hosts_http_full.txt"
         
         if [ "$VERBOSE" = true ]; then
-            wafw00f -i "$recon_dir/hosts_http.txt" -o "$recon_dir/wafw00f.txt" 2>&1
+            wafw00f -i "$recon_dir/hosts_http_full.txt" -o "$recon_dir/wafw00f.txt" 2>&1
         else
-            wafw00f -i "$recon_dir/hosts_http.txt" -o "$recon_dir/wafw00f.txt" 2>/dev/null
+            wafw00f -i "$recon_dir/hosts_http_full.txt" -o "$recon_dir/wafw00f.txt" 2>/dev/null
         fi
         
         log SUCCESS "WAF detection completed"
@@ -1085,13 +1088,20 @@ run_logsensor() {
             fi
         fi
         
-        # Filter out ASCII art and extract URLs
-        grep -E "^https?://" "$recon_dir/logins.txt" > "$recon_dir/logins_clean.txt" 2>/dev/null || true
+        # Filter out ASCII art, ANSI codes, and extract only URLs
+        # Remove ANSI escape sequences and extract only lines that look like URLs
+        sed 's/\x1b\[[0-9;]*m//g' "$recon_dir/logins.txt" | \
+            grep -E "^https?://" | \
+            grep -v "SyntaxWarning" | \
+            sort -u > "$recon_dir/logins_clean.txt" 2>/dev/null || true
+        
         if [ -f "$recon_dir/logins_clean.txt" ] && [ -s "$recon_dir/logins_clean.txt" ]; then
             mv "$recon_dir/logins_clean.txt" "$recon_dir/logins.txt"
             local count=$(wc -l < "$recon_dir/logins.txt")
             log SUCCESS "Found $count login panels"
         else
+            # If no URLs found, create empty file to avoid errors in reporting
+            touch "$recon_dir/logins.txt"
             log INFO "No login panels detected"
         fi
     else
@@ -1168,32 +1178,69 @@ run_for_target() {
     local log_file=$(start_target_log "$target")
     
     log INFO "Processing target: $target"
+    log_to_file "$log_file" "=============================================="
     log_to_file "$log_file" "Processing target: $target"
+    log_to_file "$log_file" "=============================================="
     
     init_target_dirs "$target"
     
     # Run phases
+    log_to_file "$log_file" "Phase 1: ASN/Infrastructure discovery"
     run_asnmap_if_asn "$target"
+    
+    log_to_file "$log_file" "Phase 2: Cloud & Certificates discovery"
     run_ipranges_caduceus_if_cloud "$target"
+    
+    log_to_file "$log_file" "Phase 3: Subdomain enumeration"
     run_subfinder_bbot "$target"
+    
+    log_to_file "$log_file" "Phase 4: Port scanning"
     run_naabu_smap "$target"
+    
+    log_to_file "$log_file" "Phase 5: HTTP probing"
     run_httpx "$target"
+    
+    log_to_file "$log_file" "Phase 6: WAF detection"
     run_wafw00f "$target"
+    
+    log_to_file "$log_file" "Phase 7: 403 bypass attempts"
     run_403jump "$target"
+    
+    log_to_file "$log_file" "Phase 8: Content & JS discovery (GAU)"
     run_gau_sensitive "$target"
+    
+    log_to_file "$log_file" "Phase 9: Endpoint discovery (Cariddi)"
     run_cariddi "$target"
+    
+    log_to_file "$log_file" "Phase 10: JS analysis"
     run_jsmap "$target"
+    
+    log_to_file "$log_file" "Phase 11: CORS analysis"
     run_corsy "$target"
+    
+    log_to_file "$log_file" "Phase 12: CSP analysis"
     run_csp_stalker "$target"
+    
+    log_to_file "$log_file" "Phase 13: Favicon fingerprinting"
     run_favicorn "$target"
+    
+    log_to_file "$log_file" "Phase 14: Login panel detection"
     run_logsensor "$target"
+    
+    log_to_file "$log_file" "Phase 15: CVE mapping"
     run_cvemap "$target"
     
     # Generate reports
+    log_to_file "$log_file" "=============================================="
+    log_to_file "$log_file" "Generating reports..."
     generate_target_reports "$target"
-    summarize_target_to_stdout "$target"
     
-    log_to_file "$log_file" "Completed reconnaissance for target: $target"
+    log_to_file "$log_file" "=============================================="
+    log_to_file "$log_file" "Reconnaissance completed for: $target"
+    log_to_file "$log_file" "Total execution time: $SECONDS seconds"
+    log_to_file "$log_file" "=============================================="
+    
+    summarize_target_to_stdout "$target"
 }
 
 ###############################################################################
@@ -1382,6 +1429,35 @@ generate_html_report() {
             color: #666;
             background: #f8f9fa;
         }
+        details {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        summary {
+            cursor: pointer;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border-radius: 4px;
+            font-weight: bold;
+            user-select: none;
+        }
+        summary:hover {
+            background: #5568d3;
+        }
+        details[open] summary {
+            margin-bottom: 10px;
+        }
+        .finding-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-left: 3px solid #667eea;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -1420,72 +1496,121 @@ generate_html_report() {
         </div>
 EOF
 
-    # Add subdomains table
+    # Add subdomains table with collapse
     if [ -f "$httpx_json" ] && command -v jq &> /dev/null; then
+        # Create deduplicated subdomains with unique URLs
+        jq -r '. | "\(.url)|\(.status_code)|\(.title // \"N/A\")"' "$httpx_json" 2>/dev/null | sort -u > "/tmp/subdomains_tmp_$$"
+        
         cat >> "$html_file" << 'EOF'
         <div class="section">
             <h2>🌐 Discovered Subdomains</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Subdomain</th>
-                        <th>Status</th>
-                        <th>WAF</th>
-                        <th>Login Panel</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <details open>
+                <summary>Click to expand/collapse subdomain list</summary>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Subdomain</th>
+                            <th>Status</th>
+                            <th>Title</th>
+                        </tr>
+                    </thead>
+                    <tbody>
 EOF
         
-        jq -r '. | "                    <tr><td>\(.url)</td><td><span class=\"status-code code-\(.status_code | tostring | .[0:1])xx\">\(.status_code)</span></td><td>No</td><td>No</td></tr>"' "$httpx_json" 2>/dev/null | head -100 >> "$html_file"
+        # Add all subdomains (deduplicated)
+        while IFS='|' read -r url status title; do
+            local status_class="code-${status:0:1}xx"
+            echo "                    <tr><td>$url</td><td><span class=\"status-code $status_class\">$status</span></td><td>${title:0:50}</td></tr>" >> "$html_file"
+        done < "/tmp/subdomains_tmp_$$"
+        rm -f "/tmp/subdomains_tmp_$$"
         
         cat >> "$html_file" << 'EOF'
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </details>
         </div>
 EOF
     fi
     
-    # Add findings sections
-    if [ -f "$logins_file" ] && [ -s "$logins_file" ]; then
-        cat >> "$html_file" << EOF
+    # Add findings sections with top 10
+    cat >> "$html_file" << 'EOF'
         <div class="section">
             <h2>🎯 Key Findings</h2>
-            <h3 style="margin-top: 20px; color: #17a2b8;">Login Panels Detected</h3>
-            <div class="code-block">
 EOF
-        head -20 "$logins_file" >> "$html_file" 2>/dev/null || true
+    
+    # Login Panels (top 10)
+    if [ -f "$logins_file" ] && [ -s "$logins_file" ]; then
         cat >> "$html_file" << 'EOF'
-            </div>
-        </div>
+            <details open>
+                <summary>🔐 Login Panels Detected (Top 10)</summary>
+EOF
+        head -10 "$logins_file" 2>/dev/null | while IFS= read -r line; do
+            echo "                <div class=\"finding-item\">$line</div>" >> "$html_file"
+        done
+        cat >> "$html_file" << 'EOF'
+            </details>
 EOF
     fi
     
-    if [ -f "$cors_file" ] && [ -s "$cors_file" ]; then
-        cat >> "$html_file" << EOF
-        <div class="section">
-            <h3 style="color: #dc3545;">CORS Vulnerabilities</h3>
-            <div class="code-block">
-EOF
-        head -20 "$cors_file" >> "$html_file" 2>/dev/null || true
-        cat >> "$html_file" << 'EOF'
-            </div>
-        </div>
-EOF
-    fi
-    
+    # Sensitive Files (top 10)
     if [ -f "$sensitive_file" ] && [ -s "$sensitive_file" ]; then
-        cat >> "$html_file" << EOF
-        <div class="section">
-            <h3 style="color: #ffc107;">Sensitive Files Found</h3>
-            <div class="code-block">
-EOF
-        head -30 "$sensitive_file" >> "$html_file" 2>/dev/null || true
         cat >> "$html_file" << 'EOF'
-            </div>
-        </div>
+            <details>
+                <summary>⚠️ Sensitive Files Found (Top 10)</summary>
+EOF
+        sort -u "$sensitive_file" | head -10 2>/dev/null | while IFS= read -r line; do
+            echo "                <div class=\"finding-item\">$line</div>" >> "$html_file"
+        done
+        cat >> "$html_file" << 'EOF'
+            </details>
 EOF
     fi
+    
+    # CORS Vulnerabilities (top 10)
+    if [ -f "$cors_file" ] && [ -s "$cors_file" ]; then
+        cat >> "$html_file" << 'EOF'
+            <details>
+                <summary>🌐 CORS Vulnerabilities (Top 10)</summary>
+EOF
+        grep -i "vulnerable\|misconfigured" "$cors_file" 2>/dev/null | head -10 | while IFS= read -r line; do
+            echo "                <div class=\"finding-item\">$line</div>" >> "$html_file"
+        done
+        cat >> "$html_file" << 'EOF'
+            </details>
+EOF
+    fi
+    
+    # 403 Bypasses (top 10)
+    if [ -f "$bypass_file" ] && [ -s "$bypass_file" ]; then
+        cat >> "$html_file" << 'EOF'
+            <details>
+                <summary>🚀 403 Bypasses Successful (Top 10)</summary>
+EOF
+        grep "200\|302" "$bypass_file" 2>/dev/null | head -10 | while IFS= read -r line; do
+            echo "                <div class=\"finding-item\">$line</div>" >> "$html_file"
+        done
+        cat >> "$html_file" << 'EOF'
+            </details>
+EOF
+    fi
+    
+    # WAF Detections (top 10)
+    if [ -f "$waf_file" ] && [ -s "$waf_file" ]; then
+        cat >> "$html_file" << 'EOF'
+            <details>
+                <summary>🛡️ WAF Detections (Top 10)</summary>
+EOF
+        grep -i "waf\|detected" "$waf_file" 2>/dev/null | head -10 | while IFS= read -r line; do
+            echo "                <div class=\"finding-item\">$line</div>" >> "$html_file"
+        done
+        cat >> "$html_file" << 'EOF'
+            </details>
+EOF
+    fi
+    
+    cat >> "$html_file" << 'EOF'
+        </div>
+EOF
     
     cat >> "$html_file" << 'EOF'
         <div class="footer">
@@ -1606,6 +1731,11 @@ summarize_target_to_stdout() {
     if [ -f "$subdomains_file" ]; then
         local sub_count=$(wc -l < "$subdomains_file")
         echo -e "  ${GREEN}Subdomains discovered:${NC} $sub_count"
+        if [ "$sub_count" -gt 0 ]; then
+            echo -e "  ${DIM}Top 10:${NC}"
+            head -10 "$subdomains_file" | sed 's/^/    • /'
+        fi
+        echo ""
     fi
     
     # Count HTTP services
@@ -1613,47 +1743,89 @@ summarize_target_to_stdout() {
     if [ -f "$httpx_json" ] && command -v jq &> /dev/null; then
         local http_count=$(jq -r '.url' "$httpx_json" 2>/dev/null | wc -l)
         echo -e "  ${GREEN}HTTP services found:${NC} $http_count"
+        if [ "$http_count" -gt 0 ]; then
+            echo -e "  ${DIM}Top 10:${NC}"
+            jq -r '.url' "$httpx_json" 2>/dev/null | sort -u | head -10 | sed 's/^/    • /'
+        fi
+        echo ""
     fi
     
     # Count login panels
     local logins_file="recon/$target/09_logins_vulns/logins.txt"
-    if [ -f "$logins_file" ]; then
+    if [ -f "$logins_file" ] && [ -s "$logins_file" ]; then
         local login_count=$(wc -l < "$logins_file")
         echo -e "  ${YELLOW}Login panels found:${NC} $login_count"
+        if [ "$login_count" -gt 0 ]; then
+            echo -e "  ${DIM}Top 10:${NC}"
+            head -10 "$logins_file" | sed 's/^/    • /'
+        fi
+        echo ""
     fi
     
     # Count 403 URLs and bypasses
     local urls_403="recon/$target/06_waf_403/403_urls.txt"
-    if [ -f "$urls_403" ]; then
+    if [ -f "$urls_403" ] && [ -s "$urls_403" ]; then
         local count_403=$(wc -l < "$urls_403")
         echo -e "  ${YELLOW}403 URLs found:${NC} $count_403"
     fi
     
     local bypass_file="recon/$target/06_waf_403/403jump_results.txt"
-    if [ -f "$bypass_file" ]; then
+    if [ -f "$bypass_file" ] && [ -s "$bypass_file" ]; then
         local bypass_count=$(grep -c "200\|302" "$bypass_file" 2>/dev/null || echo "0")
-        echo -e "  ${GREEN}403 bypasses successful:${NC} $bypass_count"
+        if [ "$bypass_count" -gt 0 ]; then
+            echo -e "  ${GREEN}403 bypasses successful:${NC} $bypass_count"
+            echo -e "  ${DIM}Top 10 bypassed URLs:${NC}"
+            grep "200\|302" "$bypass_file" 2>/dev/null | head -10 | sed 's/^/    • /'
+            echo ""
+        fi
     fi
     
     # Count sensitive files
     local sensitive_file="recon/$target/07_content_js/gau/sensitive_files.txt"
-    if [ -f "$sensitive_file" ]; then
+    if [ -f "$sensitive_file" ] && [ -s "$sensitive_file" ]; then
         local sens_count=$(wc -l < "$sensitive_file")
         echo -e "  ${RED}Sensitive files discovered:${NC} $sens_count"
+        if [ "$sens_count" -gt 0 ]; then
+            echo -e "  ${DIM}Top 10:${NC}"
+            sort -u "$sensitive_file" | head -10 | sed 's/^/    • /'
+        fi
+        echo ""
     fi
     
     # Count WAFs
     local waf_file="recon/$target/06_waf_403/wafw00f.txt"
-    if [ -f "$waf_file" ]; then
+    if [ -f "$waf_file" ] && [ -s "$waf_file" ]; then
         local waf_count=$(grep -ic "waf\|detected" "$waf_file" 2>/dev/null || echo "0")
-        echo -e "  ${YELLOW}WAFs detected:${NC} $waf_count"
+        if [ "$waf_count" -gt 0 ]; then
+            echo -e "  ${YELLOW}WAFs detected:${NC} $waf_count"
+            echo -e "  ${DIM}Top 10:${NC}"
+            grep -i "waf\|detected" "$waf_file" 2>/dev/null | head -10 | sed 's/^/    • /'
+            echo ""
+        fi
     fi
     
     # Count CORS issues
     local cors_file="recon/$target/08_policies/corsy/cors_results.txt"
-    if [ -f "$cors_file" ]; then
+    if [ -f "$cors_file" ] && [ -s "$cors_file" ]; then
         local cors_count=$(grep -ic "vulnerable\|misconfigured" "$cors_file" 2>/dev/null || echo "0")
-        echo -e "  ${RED}CORS misconfigurations:${NC} $cors_count"
+        if [ "$cors_count" -gt 0 ]; then
+            echo -e "  ${RED}CORS misconfigurations:${NC} $cors_count"
+            echo -e "  ${DIM}Top 10:${NC}"
+            grep -i "vulnerable\|misconfigured" "$cors_file" 2>/dev/null | head -10 | sed 's/^/    • /'
+            echo ""
+        fi
+    fi
+    
+    # Count CSP issues
+    local csp_file="recon/$target/08_policies/csp_stalker/csp_results.txt"
+    if [ -f "$csp_file" ] && [ -s "$csp_file" ]; then
+        local csp_count=$(wc -l < "$csp_file" 2>/dev/null || echo "0")
+        if [ "$csp_count" -gt 0 ]; then
+            echo -e "  ${YELLOW}CSP issues found:${NC} $csp_count"
+            echo -e "  ${DIM}Top 10:${NC}"
+            head -10 "$csp_file" | sed 's/^/    • /'
+            echo ""
+        fi
     fi
     
     echo ""

@@ -78,13 +78,21 @@ The tool is designed to be:
    ```bash
    cp config/apikeys.example.env config/apikeys.env
    nano config/apikeys.env  # Edit with your API keys
+   
+   # Fix line endings if edited on Windows
+   dos2unix config/apikeys.env
    ```
+   
+   **Note**: If you edit `apikeys.env` on Windows and transfer to Linux, run `dos2unix config/apikeys.env` to fix line endings, otherwise you'll get `$'\r': command not found` errors.
 
 ## Usage
 
 ### Basic Usage
 
 ```bash
+# Single domain reconnaissance
+./recondite_v2.sh -d example.com --full -o reports
+
 # Full reconnaissance on domains from scope.txt
 ./recondite_v2.sh -d scope.txt --full -o reports
 
@@ -122,7 +130,7 @@ The tool is designed to be:
 
 | Option | Description |
 |--------|-------------|
-| `-d, --domains FILE` | **Required**. File with list of root domains (one per line) |
+| `-d, --domains DOMAIN\|FILE` | **Required**. Single domain (e.g., `example.com`) or file with domains (one per line) |
 | `-a, --asn FILE` | File with list of ASNs (e.g. `AS1234`) |
 | `-o, --output DIR` | Base output directory for reports (default: `./reports`) |
 | `--cloud` | Enable cloud/CDN & certs phase |
@@ -183,12 +191,28 @@ Create `config/apikeys.env` from the example:
 
 ```bash
 cp config/apikeys.example.env config/apikeys.env
+nano config/apikeys.env  # Edit with your actual API keys
+
+# Important: Fix line endings if edited on Windows
+dos2unix config/apikeys.env
+```
+
+**API Key Format**: All API keys must be enclosed in double quotes:
+```bash
+export SHODAN_API_KEY="your_actual_key_here"
+export GITHUB_TOKEN="ghp_your_github_token"
 ```
 
 Key API keys to configure:
 - **PDCP_API_KEY**: For asnmap, cvemap (ProjectDiscovery Cloud Platform)
 - **SHODAN_API_KEY**: For Smap passive port scanning
 - **GITHUB_TOKEN**: For subfinder, bbot (optional but recommended)
+
+**Troubleshooting**: If you see `$'\r': command not found` errors, your file has Windows line endings. Fix with:
+```bash
+sudo apt install dos2unix -y
+dos2unix config/apikeys.env
+```
 
 ### Passive Mode
 
