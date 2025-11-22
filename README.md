@@ -63,9 +63,14 @@ The tool is designed to be:
    cd recondite_v2
    ```
 
-2. **Run the installer**:
+2. **Give execution permissions**:
    ```bash
-   bash install.sh
+   chmod +x recondite_v2.sh install.sh
+   ```
+
+3. **Run the installer**:
+   ```bash
+   ./install.sh
    ```
    
    The installer will:
@@ -74,7 +79,7 @@ The tool is designed to be:
    - Set up configuration files
    - **Note**: Some steps may require `sudo` (e.g., `apt install`). The installer will print commands for you to run manually.
 
-3. **Configure API keys** (optional but recommended):
+4. **Configure API keys** (optional but recommended):
    ```bash
    cp config/apikeys.example.env config/apikeys.env
    nano config/apikeys.env  # Edit with your API keys
@@ -184,6 +189,25 @@ Reports are generated in the output directory (`-o`):
 - `run.log` - Execution log
 
 ## Configuration
+
+### ASN Discovery
+
+To discover ASNs (Autonomous System Numbers) for your target organization:
+
+1. **Using bgp.he.net**: Visit [Hurricane Electric BGP Toolkit](http://bgp.he.net) and search for your target organization name or domain
+2. **Identify ASNs**: Look for ASN numbers (e.g., `AS13335` for Cloudflare)
+3. **Create ASN file**: Add discovered ASNs to `asns.txt` (one per line):
+   ```
+   AS13335
+   AS14618
+   AS16509
+   ```
+4. **Run with ASN mapping**: Use the `-a` flag to include ASN to IP range mapping:
+   ```bash
+   ./recondite_v2.sh -d example.com -a asns.txt --full -o reports
+   ```
+
+The tool will use [asnmap](https://github.com/projectdiscovery/asnmap) to convert ASNs to IP ranges, which helps identify all network blocks owned by the target organization for comprehensive reconnaissance.
 
 ### API Keys
 

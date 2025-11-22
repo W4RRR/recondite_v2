@@ -21,6 +21,7 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
+DIM='\033[2m'
 
 # Global variables
 DOMAINS_INPUT=""
@@ -411,18 +412,21 @@ run_caduceus() {
     
     if check_tool "caduceus"; then
         if [ -f "$ip_file" ] && [ -s "$ip_file" ]; then
+            # Caduceus uses -i flag for input file with IPs/CIDRs
             if [ "$VERBOSE" = true ]; then
-                caduceus -i "$ip_file" -o "$recon_dir/certs.json" 2>&1
+                caduceus -i "$ip_file" 2>&1 | tee "$recon_dir/certs.txt"
             else
-                caduceus -i "$ip_file" -o "$recon_dir/certs.json" 2>/dev/null
+                caduceus -i "$ip_file" > "$recon_dir/certs.txt" 2>/dev/null
             fi
         else
-            # Run on target domain directly
+            # For single domain, create a temp file with the domain
+            echo "$target" > "$recon_dir/target_temp.txt"
             if [ "$VERBOSE" = true ]; then
-                caduceus -d "$target" -o "$recon_dir/certs.json" 2>&1
+                caduceus -i "$recon_dir/target_temp.txt" 2>&1 | tee "$recon_dir/certs.txt"
             else
-                caduceus -d "$target" -o "$recon_dir/certs.json" 2>/dev/null
+                caduceus -i "$recon_dir/target_temp.txt" > "$recon_dir/certs.txt" 2>/dev/null
             fi
+            rm -f "$recon_dir/target_temp.txt"
         fi
         
         log SUCCESS "Certificate discovery completed"
@@ -442,11 +446,18 @@ run_gungnir() {
     log INFO "Running gungnir for certificate monitoring"
     
     if check_tool "gungnir"; then
+        # Gungnir requires -r flag with a file containing root domains
+        local domain_file="$recon_dir/target_domains.txt"
+        echo "$target" > "$domain_file"
+        
         if [ "$VERBOSE" = true ]; then
-            gungnir -d "$target" -o "$recon_dir/${target}-certs.txt" 2>&1
+            gungnir -r "$domain_file" -o "$recon_dir" 2>&1
         else
-            gungnir -d "$target" -o "$recon_dir/${target}-certs.txt" 2>/dev/null
+            gungnir -r "$domain_file" -o "$recon_dir" 2>/dev/null
         fi
+        
+        # Consolidate results if any
+        cat "$recon_dir"/*.txt 2>/dev/null | sort -u > "$recon_dir/${target}-certs.txt" || true
         
         log SUCCESS "Gungnir certificate monitoring completed"
     else
@@ -514,14 +525,20 @@ run_subfinder_bbot() {
         local bbot_output="$recon_dir/bbot"
         mkdir -p "$bbot_output"
         
+        # BBOT 2.x+ uses different flags: -f subdomain-enum to use the subdomain-enum preset
+        # Or just run without module flags to use default passive reconnaissance
         if [ "$VERBOSE" = true ]; then
-            bbot -t "$target" -m subdomain-enum -o "$bbot_output" 2>&1
+            bbot -t "$target" -f subdomain-enum -o "$bbot_output" 2>&1 || \
+            bbot -t "$target" -o "$bbot_output" 2>&1
         else
-            bbot -t "$target" -m subdomain-enum -o "$bbot_output" 2>/dev/null
+            bbot -t "$target" -f subdomain-enum -o "$bbot_output" 2>/dev/null || \
+            bbot -t "$target" -o "$bbot_output" 2>/dev/null
         fi
         
-        # Extract subdomains from bbot output
-        find "$bbot_output" -name '*subdomains*.txt' -exec cat {} \; > "$recon_dir/bbot_subs.txt" 2>/dev/null || true
+        # Extract subdomains from bbot output (they're usually in output.txt or subdomains.txt)
+        find "$bbot_output" -type f \( -name '*.txt' -o -name 'output.txt' -o -name 'subdomains.txt' \) \
+            -exec grep -Eo "([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+$target" {} \; 2>/dev/null | \
+            sort -u > "$recon_dir/bbot_subs.txt" || true
         apply_delay
     else
         log WARNING "bbot not found. Skipping bbot"
@@ -580,12 +597,26 @@ run_naabu_smap() {
         
         if [ -f "$subdomains_file" ] && [ -s "$subdomains_file" ]; then
             if [ -n "${SHODAN_API_KEY:-}" ]; then
-                export SHODAN_API_KEY
+                # Smap requires: smap -iL <file> or individual IPs
+                # Process each subdomain individually to avoid argument errors
+                while IFS= read -r subdomain; do
+                    [ -z "$subdomain" ] && continue
+                    
+                    if [ "$VERBOSE" = true ]; then
+                        echo "$subdomain" | smap >> "$recon_dir/smap_ports.txt" 2>&1 || true
+                    else
+                        echo "$subdomain" | smap >> "$recon_dir/smap_ports.txt" 2>/dev/null || true
+                    fi
+                done < "$subdomains_file"
+                
+                # Alternative: use smap with proper syntax
+                # smap -iL expects one input per line, no output flag needed
                 if [ "$VERBOSE" = true ]; then
-                    smap -iL "$subdomains_file" -o "$recon_dir/smap_ports.txt" 2>&1
+                    cat "$subdomains_file" | smap > "$recon_dir/smap_ports.txt" 2>&1 || true
                 else
-                    smap -iL "$subdomains_file" -o "$recon_dir/smap_ports.txt" 2>/dev/null
+                    cat "$subdomains_file" | smap > "$recon_dir/smap_ports.txt" 2>/dev/null || true
                 fi
+                
                 apply_delay
             else
                 log WARNING "SHODAN_API_KEY not set. Skipping smap"
@@ -838,10 +869,12 @@ run_cariddi() {
     fi
     
     if [ -f "$urls_file" ] && [ -s "$urls_file" ]; then
+        # Cariddi reads from stdin, not from -l flag
+        # Use -plain for cleaner output, -e for endpoints, -s for secrets
         if [ "$VERBOSE" = true ]; then
-            cariddi -l "$urls_file" -o "$recon_dir/results.txt" 2>&1
+            cat "$urls_file" | cariddi -e -s -plain > "$recon_dir/results.txt" 2>&1
         else
-            cariddi -l "$urls_file" -o "$recon_dir/results.txt" 2>/dev/null
+            cat "$urls_file" | cariddi -e -s -plain > "$recon_dir/results.txt" 2>/dev/null
         fi
         log SUCCESS "Cariddi endpoint discovery completed"
     else
@@ -1022,10 +1055,11 @@ run_favicorn() {
     fi
     
     if [ -f "$urls_file" ] && [ -s "$urls_file" ]; then
+        # Favicorn uses -f for file input, not -l
         if [ "$VERBOSE" = true ]; then
-            favicorn -l "$urls_file" -o "$recon_dir/favicorn_results.txt" 2>&1
+            favicorn -f "$urls_file" > "$recon_dir/favicorn_results.txt" 2>&1
         else
-            favicorn -l "$urls_file" -o "$recon_dir/favicorn_results.txt" 2>/dev/null
+            favicorn -f "$urls_file" > "$recon_dir/favicorn_results.txt" 2>/dev/null
         fi
         log SUCCESS "Favicon fingerprinting completed"
     else
