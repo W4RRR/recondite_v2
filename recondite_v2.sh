@@ -144,6 +144,65 @@ check_tool() {
     return 1
 }
 
+identify_cloud_provider() {
+    local ip=$1
+    local ipranges_file="ipranges_with_names.txt"
+    
+    # Return empty if file doesn't exist
+    if [ ! -f "$ipranges_file" ]; then
+        echo "unknown"
+        return 1
+    fi
+    
+    # Use grepcidr if available (fastest method)
+    if command -v grepcidr &> /dev/null; then
+        local result=$(grepcidr "$ip" "$ipranges_file" 2>/dev/null | head -1 | awk '{print $2}')
+        if [ -n "$result" ]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Fallback: use Python if available (most reliable)
+    if command -v python3 &> /dev/null; then
+        local result=$(python3 -c "
+import ipaddress
+import sys
+
+target_ip = ipaddress.ip_address('$ip')
+
+with open('$ipranges_file', 'r') as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 2:
+            try:
+                network = ipaddress.ip_network(parts[0], strict=False)
+                if target_ip in network:
+                    print(parts[1])
+                    sys.exit(0)
+            except:
+                continue
+" 2>/dev/null)
+        
+        if [ -n "$result" ]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Last resort: simple grep for first 2 octets (less accurate but fast)
+    local first_octets=$(echo "$ip" | cut -d'.' -f1-2)
+    local result=$(grep "^${first_octets}\." "$ipranges_file" 2>/dev/null | head -1 | awk '{print $2}')
+    
+    if [ -n "$result" ]; then
+        echo "$result"
+        return 0
+    else
+        echo "unknown"
+        return 1
+    fi
+}
+
 load_api_keys() {
     local apikeys_file="${CONFIG_DIR}/apikeys.env"
     if [[ -f "$apikeys_file" ]]; then
@@ -359,37 +418,32 @@ run_ipranges() {
     
     mkdir -p "$recon_dir"
     
-    log INFO "Downloading cloud provider IP ranges (ipranges data)"
+    log INFO "Loading cloud provider IP ranges from local database"
     
-    # ipranges is not a tool, it's a data repository - download the "all" lists
-    local base_url="https://raw.githubusercontent.com/lord-alfred/ipranges/main/all"
+    # Use local ipranges_with_names.txt file
+    local ipranges_file="ipranges_with_names.txt"
     
-    if command -v curl &> /dev/null; then
-        curl -sSL "$base_url/ipv4_merged.txt" -o "$recon_dir/ipv4_all_providers.txt" 2>/dev/null || true
-        curl -sSL "$base_url/ipv6_merged.txt" -o "$recon_dir/ipv6_all_providers.txt" 2>/dev/null || true
+    if [ ! -f "$ipranges_file" ]; then
+        log WARNING "ipranges_with_names.txt not found. Skipping cloud provider identification"
+        return 0
+    fi
+    
+    # Copy to recon directory for reference
+    cp "$ipranges_file" "$recon_dir/all_providers_with_names.txt"
+    
+    local total_ranges=$(wc -l < "$ipranges_file" 2>/dev/null || echo "0")
+    log SUCCESS "Loaded cloud provider IP ranges database ($total_ranges entries)"
+    
+    # Extract unique provider names for statistics
+    awk '{print $2}' "$ipranges_file" 2>/dev/null | sort -u > "$recon_dir/providers_list.txt" || true
+    
+    if [ -f "$recon_dir/providers_list.txt" ]; then
+        local providers_count=$(wc -l < "$recon_dir/providers_list.txt")
+        log INFO "Database contains $providers_count different cloud providers"
         
-        # Combine both for convenience
-        cat "$recon_dir/ipv4_all_providers.txt" "$recon_dir/ipv6_all_providers.txt" 2>/dev/null > "$recon_dir/all_providers.txt" || true
-        
-        if [ -s "$recon_dir/all_providers.txt" ]; then
-            log SUCCESS "Cloud provider IP ranges downloaded ($(wc -l < "$recon_dir/all_providers.txt") ranges)"
-        else
-            log WARNING "Failed to download ipranges data"
+        if [ "$VERBOSE" = true ]; then
+            log DEBUG "Providers: $(head -20 "$recon_dir/providers_list.txt" | tr '\n' ', ' | sed 's/,$//')"
         fi
-    elif command -v wget &> /dev/null; then
-        wget -q "$base_url/ipv4_merged.txt" -O "$recon_dir/ipv4_all_providers.txt" 2>/dev/null || true
-        wget -q "$base_url/ipv6_merged.txt" -O "$recon_dir/ipv6_all_providers.txt" 2>/dev/null || true
-        
-        # Combine both for convenience
-        cat "$recon_dir/ipv4_all_providers.txt" "$recon_dir/ipv6_all_providers.txt" 2>/dev/null > "$recon_dir/all_providers.txt" || true
-        
-        if [ -s "$recon_dir/all_providers.txt" ]; then
-            log SUCCESS "Cloud provider IP ranges downloaded ($(wc -l < "$recon_dir/all_providers.txt") ranges)"
-        else
-            log WARNING "Failed to download ipranges data"
-        fi
-    else
-        log WARNING "curl or wget not found. Skipping ipranges download"
     fi
     
     apply_delay
@@ -704,6 +758,41 @@ run_httpx() {
         if command -v jq &> /dev/null; then
             jq -r 'select(.url | test("(login|signin|auth|admin|dashboard)"; "i")) | .url' \
                 "$recon_dir/httpx.json" > "$recon_dir/likely_logins.txt" 2>/dev/null || true
+        fi
+        
+        # Identify cloud providers for each IP found
+        log INFO "Identifying cloud providers for discovered IPs..."
+        if command -v jq &> /dev/null; then
+            echo "# IP | Provider | URL | Status" > "$recon_dir/cloud_providers_mapping.txt"
+            
+            jq -r '.host + "|" + .url + "|" + (.status_code|tostring)' "$recon_dir/httpx.json" 2>/dev/null | \
+            while IFS='|' read -r ip url status; do
+                # Skip if IP is IPv6 or empty
+                if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    local provider=$(identify_cloud_provider "$ip" 2>/dev/null)
+                    if [ -n "$provider" ] && [ "$provider" != "unknown" ]; then
+                        echo "$ip | $provider | $url | $status" >> "$recon_dir/cloud_providers_mapping.txt"
+                    fi
+                fi
+            done
+            
+            # Create summary by provider
+            if [ -f "$recon_dir/cloud_providers_mapping.txt" ]; then
+                awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}' "$recon_dir/cloud_providers_mapping.txt" 2>/dev/null | \
+                    sort | uniq -c | sort -rn > "$recon_dir/providers_summary.txt" || true
+                
+                if [ -s "$recon_dir/providers_summary.txt" ]; then
+                    local providers_found=$(wc -l < "$recon_dir/providers_summary.txt")
+                    log SUCCESS "Identified $providers_found different cloud providers"
+                    
+                    if [ "$VERBOSE" = true ]; then
+                        log DEBUG "Cloud providers found:"
+                        head -5 "$recon_dir/providers_summary.txt" | while read count provider; do
+                            log DEBUG "  - $provider: $count IPs"
+                        done
+                    fi
+                fi
+            fi
         fi
         
         local count=$(jq -r '.url' "$recon_dir/httpx.json" 2>/dev/null | wc -l)
@@ -1324,6 +1413,7 @@ generate_html_report() {
     local sensitive_file="recon/$target/07_content_js/gau/sensitive_files.txt"
     local waf_file="recon/$target/06_waf_403/wafw00f.txt"
     local bypass_file="recon/$target/06_waf_403/403jump_results.txt"
+    local providers_file="recon/$target/05_http/providers_summary.txt"
     
     local sub_count=0
     local http_count=0
@@ -1332,6 +1422,7 @@ generate_html_report() {
     local sens_count=0
     local waf_count=0
     local bypass_count=0
+    local providers_count=0
     
     [ -f "$subdomains_file" ] && sub_count=$(wc -l < "$subdomains_file" 2>/dev/null || echo "0")
     [ -f "$httpx_json" ] && command -v jq &> /dev/null && http_count=$(jq -r '.url' "$httpx_json" 2>/dev/null | wc -l)
@@ -1340,6 +1431,7 @@ generate_html_report() {
     [ -f "$sensitive_file" ] && sens_count=$(wc -l < "$sensitive_file" 2>/dev/null || echo "0")
     [ -f "$waf_file" ] && waf_count=$(grep -ic "waf\|detected" "$waf_file" 2>/dev/null || echo "0")
     [ -f "$bypass_file" ] && bypass_count=$(grep -c "200\|302" "$bypass_file" 2>/dev/null || echo "0")
+    [ -f "$providers_file" ] && providers_count=$(wc -l < "$providers_file" 2>/dev/null || echo "0")
     
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
@@ -1512,6 +1604,10 @@ generate_html_report() {
                 <div class="stat-label">HTTP Services</div>
             </div>
             <div class="stat-card">
+                <div class="stat-value">$providers_count</div>
+                <div class="stat-label">Cloud Providers</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-value">$waf_count</div>
                 <div class="stat-label">WAF Detected</div>
             </div>
@@ -1562,6 +1658,82 @@ EOF
                     </tbody>
                 </table>
             </details>
+        </div>
+EOF
+    fi
+    
+    # Add cloud providers section
+    local cloud_mapping_file="recon/$target/05_http/cloud_providers_mapping.txt"
+    if [ -f "$providers_file" ] && [ -s "$providers_file" ]; then
+        cat >> "$html_file" << 'EOF'
+        <div class="section">
+            <h2>☁️ Cloud Infrastructure</h2>
+            <details open>
+                <summary>Cloud Providers Identified</summary>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Provider</th>
+                            <th>IPs Count</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+EOF
+        
+        # Calculate total IPs
+        local total_ips=$(awk '{sum+=$1} END {print sum}' "$providers_file" 2>/dev/null || echo "1")
+        
+        # Add providers to table
+        while read -r count provider; do
+            local percentage=$(awk "BEGIN {printf \"%.1f\", ($count/$total_ips)*100}")
+            echo "                    <tr><td><strong>$provider</strong></td><td>$count</td><td>$percentage%</td></tr>" >> "$html_file"
+        done < "$providers_file"
+        
+        cat >> "$html_file" << 'EOF'
+                    </tbody>
+                </table>
+            </details>
+EOF
+        
+        # Add detailed IP mapping if available
+        if [ -f "$cloud_mapping_file" ] && [ -s "$cloud_mapping_file" ]; then
+            cat >> "$html_file" << 'EOF'
+            <details style="margin-top: 15px;">
+                <summary>Detailed IP to Provider Mapping</summary>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>IP Address</th>
+                            <th>Provider</th>
+                            <th>URL</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+EOF
+            
+            tail -n +2 "$cloud_mapping_file" 2>/dev/null | head -100 | while IFS='|' read -r ip provider url status; do
+                # Clean whitespace
+                ip=$(echo "$ip" | xargs)
+                provider=$(echo "$provider" | xargs)
+                url=$(echo "$url" | xargs)
+                status=$(echo "$status" | xargs)
+                
+                # Determine status class
+                local status_class="code-${status:0:1}xx"
+                
+                echo "                    <tr><td>$ip</td><td><span class=\"badge badge-waf\">$provider</span></td><td>$url</td><td><span class=\"status-code $status_class\">$status</span></td></tr>" >> "$html_file"
+            done
+            
+            cat >> "$html_file" << 'EOF'
+                    </tbody>
+                </table>
+            </details>
+EOF
+        fi
+        
+        cat >> "$html_file" << 'EOF'
         </div>
 EOF
     fi
@@ -1671,6 +1843,14 @@ generate_text_report() {
         echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
         echo ""
         
+        if [ -f "recon/$target/05_http/providers_summary.txt" ]; then
+            echo "═══════════════════════════════════════════════════════════"
+            echo "  CLOUD PROVIDERS"
+            echo "═══════════════════════════════════════════════════════════"
+            cat "recon/$target/05_http/providers_summary.txt"
+            echo ""
+        fi
+        
         if [ -f "recon/$target/03_subdomains/all_subdomains.txt" ]; then
             echo "═══════════════════════════════════════════════════════════"
             echo "  SUBDOMAINS"
@@ -1703,6 +1883,17 @@ generate_markdown_report() {
         echo "**Generated:** $(date '+%Y-%m-%d %H:%M:%S')"
         echo ""
         
+        if [ -f "recon/$target/05_http/providers_summary.txt" ]; then
+            echo "## ☁️ Cloud Providers"
+            echo ""
+            echo "| Provider | IPs Count |"
+            echo "|----------|-----------|"
+            while read count provider; do
+                echo "| $provider | $count |"
+            done < "recon/$target/05_http/providers_summary.txt"
+            echo ""
+        fi
+        
         if [ -f "recon/$target/03_subdomains/all_subdomains.txt" ]; then
             echo "## Subdomains"
             echo ""
@@ -1731,21 +1922,32 @@ generate_csv_report() {
     log DEBUG "Generating CSV report: $csv_file"
     
     {
-        echo "Type,URL,Status,Details"
+        echo "Type,URL/IP,Status,Details,CloudProvider"
+        
+        # Add cloud provider mapping
+        if [ -f "recon/$target/05_http/cloud_providers_mapping.txt" ]; then
+            tail -n +2 "recon/$target/05_http/cloud_providers_mapping.txt" 2>/dev/null | while IFS='|' read -r ip provider url status; do
+                ip=$(echo "$ip" | xargs)
+                provider=$(echo "$provider" | xargs)
+                url=$(echo "$url" | xargs)
+                status=$(echo "$status" | xargs)
+                echo "Cloud IP,$url,$status,$ip,$provider"
+            done
+        fi
         
         if [ -f "recon/$target/05_http/httpx.json" ] && command -v jq &> /dev/null; then
-            jq -r '. | "HTTP Service,\(.url),\(.status_code),\(.title // "N/A")"' "recon/$target/05_http/httpx.json" 2>/dev/null
+            jq -r '. | "HTTP Service,\(.url),\(.status_code),\(.title // "N/A"),"' "recon/$target/05_http/httpx.json" 2>/dev/null
         fi
         
         if [ -f "recon/$target/09_logins_vulns/logins.txt" ]; then
             while IFS= read -r url; do
-                echo "Login Panel,$url,Found,"
+                echo "Login Panel,$url,Found,,"
             done < "recon/$target/09_logins_vulns/logins.txt"
         fi
         
         if [ -f "recon/$target/08_policies/corsy/cors_results.txt" ]; then
             while IFS= read -r line; do
-                echo "CORS Vulnerability,$line,Vulnerable,"
+                echo "CORS Vulnerability,$line,Vulnerable,,"
             done < "recon/$target/08_policies/corsy/cors_results.txt"
         fi
     } > "$csv_file"
@@ -1781,6 +1983,18 @@ summarize_target_to_stdout() {
             echo -e "  ${DIM}Top 10:${NC}"
             jq -r '.url' "$httpx_json" 2>/dev/null | sort -u | head -10 | sed 's/^/    • /'
         fi
+        echo ""
+    fi
+    
+    # Show cloud providers
+    local providers_file="recon/$target/05_http/providers_summary.txt"
+    if [ -f "$providers_file" ] && [ -s "$providers_file" ]; then
+        local providers_count=$(wc -l < "$providers_file")
+        echo -e "  ${CYAN}Cloud providers identified:${NC} $providers_count"
+        echo -e "  ${DIM}Top providers:${NC}"
+        head -10 "$providers_file" | while read count provider; do
+            echo -e "    • ${BOLD}$provider${NC}: $count IPs"
+        done
         echo ""
     fi
     

@@ -209,6 +209,27 @@ To discover ASNs (Autonomous System Numbers) for your target organization:
 
 The tool will use [asnmap](https://github.com/projectdiscovery/asnmap) to convert ASNs to IP ranges, which helps identify all network blocks owned by the target organization for comprehensive reconnaissance.
 
+### Cloud Provider Identification
+
+Recondite v2 includes an extensive IP ranges database (`ipranges_with_names.txt`) with **213,000+ entries** mapping IP ranges to cloud providers:
+
+- **Automatic Detection**: During HTTP probing, the tool automatically identifies which cloud provider hosts each discovered service
+- **Supported Providers**: Amazon/AWS, Google Cloud, Azure, Oracle, Cloudflare, DigitalOcean, Linode, Vultr, Hetzner, and many more
+- **Enriched Reports**: All reports (HTML, CSV, TXT, MD) include cloud provider information
+- **Infrastructure Insights**: Understand your target's cloud infrastructure at a glance
+
+The database is used automatically—no configuration needed. The tool will:
+1. Extract IPs from HTTP probing results
+2. Match each IP against the cloud provider database
+3. Generate statistics and detailed mappings
+4. Include provider information in all reports
+
+**Benefits**:
+- Identify hosting patterns (multi-cloud, single provider)
+- Prioritize targets based on cloud provider
+- Understand attack surface distribution
+- Export data with provider info for further analysis
+
 ### API Keys
 
 Create `config/apikeys.env` from the example:
